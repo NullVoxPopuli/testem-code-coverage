@@ -14,56 +14,55 @@
  * has already been connected and coverage is active.
  */
 
-import path from "node:path";
 import fs from "node:fs";
-import { fileURLToPath } from "node:url";
 import CDP from "chrome-remote-interface";
 import { generateReport } from "#v8/report.js";
 import { REPORT_TO_MIDDLEWARE_PATH } from "#utils";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CHECK_INTERVAL = 500; // ms
 
-const CDP_PORT = 9222;
-const OUTPUT_FILE = path.join(__dirname, "coverage-data.json");
+export function middleware(options = {}) {
+  const { outputFolder = "coverage", handleReport, chrome } = options;
+  const { connectionTimeout = 30_000, rempoteDebuggingPort = 9222 } = chrome || {};
 
-let cdpClient = null;
+  const cwd = process.cwd();
+  let cdpClient = null;
 
-async function connectToCDP() {
-  // Chrome takes a moment to start; retry until it accepts a connection.
-  for (let attempt = 0; attempt < 60; attempt++) {
+  const outputPath = isAbsolute(outputFolder) ? outputFolder : join(cwd, outputFolder);
+  const outputFile = join(outputPath, "coverage-data.json");
+
+  let connectStart;
+  let lastAttempt;
+  async function connectChromeDevTools() {
+    lastAttempt = Date.now();
+
+    if (!connectStart) {
+      connectStart = Date.now();
+    }
+
+    if (lastAttempt - connectStart >= connectionTimeout) {
+      console.warn("[coverage] Could not connect to Chrome CDP after 30 s — coverage disabled.");
+      return;
+    }
+
     try {
-      const client = await CDP({ port: CDP_PORT });
+      const client = await CDP({ port: rempoteDebuggingPort });
 
       client.on("disconnect", () => {
         cdpClient = null;
       });
 
       await client.Profiler.enable();
-      await client.Profiler.startPreciseCoverage({
-        callCount: true,
-        detailed: true,
-      });
+      await client.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
 
       cdpClient = client;
       return;
     } catch {
-      await new Promise((r) => setTimeout(r, 500));
+      setTimeout(connectChromeDevTools, CHECK_INTERVAL);
     }
   }
 
-  console.warn("[coverage] Could not connect to Chrome CDP after 30 s — coverage disabled.");
-}
-
-connectToCDP();
-
-export function middleware(options = {}) {
-  const { outputFolder = 'coverage', handleReport, chrome } = options;
-  const { connectionTimeout, rempoteDebuggingPort = 9222 } = chrome || {};
-
-  const cwd = process.cwd();
-
-  const outputPath = isAbsolute(outputFolder) ? outputFolder : join(cwd, outputFolder);
-  const outputFile = join(outputPath, 'coverage-data.json');
+  void connectChromeDevTools();
 
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
@@ -74,12 +73,16 @@ export function middleware(options = {}) {
 
       try {
         const { result } = await cdpClient.Profiler.takePreciseCoverage();
+
         fs.writeFileSync(outputFile, JSON.stringify(result));
         // Generate the report before responding. The browser's QUnit.done() async
         // hook is still awaiting this response, so Chrome stays alive until we're
         // done printing. Output goes to process.stdout of the testem process and
         // appears directly in the terminal.
         await generateReport(result);
+
+        await handleReport?.(result);
+
         res.json({ ok: true, scripts: result.length });
       } catch (err) {
         console.error("\n[coverage] Error generating report:", err.stack || err.message);

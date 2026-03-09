@@ -18,7 +18,6 @@ import reports from "istanbul-reports";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const DATA_FILE = path.join(__dirname, "coverage-data.json");
 const DIST_DIR = path.join(__dirname, "dist");
 const COVERAGE_DIR = path.join(__dirname, "coverage");
 
@@ -178,25 +177,4 @@ function computeBytecoverage(functions) {
   }
 
   return { usedBytes, totalBytes: maxEnd };
-}
-
-// When invoked directly (node report.js), read from disk.
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  if (!fs.existsSync(DATA_FILE)) {
-    console.log("\n[coverage] No coverage data found (coverage-data.json missing).");
-    process.exit(0);
-  }
-
-  let v8Scripts;
-  try {
-    v8Scripts = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-  } catch (err) {
-    console.log(`\n[coverage] Failed to parse coverage data: ${err.message}`);
-    process.exit(0);
-  }
-
-  generateReport(v8Scripts).catch((err) => {
-    console.error("[coverage] Unexpected error:", err);
-    process.exit(0);
-  });
 }
