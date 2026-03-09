@@ -1,16 +1,22 @@
 {
-  "name": "ember-code-coverage",
+  "name": "testem-code-coverage",
   "version": "1.0.0",
   "type": "module",
   "description": "",
   "exports": {
-    "./qunit": "./src/qunit.js",
-    "./testem": "./src/testem/middleware.js"
+    ".": "./src/testem/middleware.js",
+    "./qunit": "./src/adapters/qunit.js"
+  },
+  "imports": {
+    "#utils": "./src/utils.js",
+    "#v8/*": "./src/v8/*"
   },
   "files": [
     "src"
   ],
   "scripts": {
+    "lint:format": "prettier . --check",
+    "format": "prettier . --write",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -26,5 +32,8 @@
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",
     "v8-to-istanbul": "^9.3.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1"
   }
 }

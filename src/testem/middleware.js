@@ -14,16 +14,17 @@
  * has already been connected and coverage is active.
  */
 
-import path from 'node:path';
-import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import CDP from 'chrome-remote-interface';
-import { generateReport } from './coverage-report.js';
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+import CDP from "chrome-remote-interface";
+import { generateReport } from "#v8/report.js";
+import { REPORT_TO_MIDDLEWARE_PATH } from "#utils";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const CDP_PORT = 9222;
-const OUTPUT_FILE = path.join(__dirname, 'coverage-data.json');
+const OUTPUT_FILE = path.join(__dirname, "coverage-data.json");
 
 let cdpClient = null;
 
@@ -33,12 +34,15 @@ async function connectToCDP() {
     try {
       const client = await CDP({ port: CDP_PORT });
 
-      client.on('disconnect', () => {
+      client.on("disconnect", () => {
         cdpClient = null;
       });
 
       await client.Profiler.enable();
-      await client.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
+      await client.Profiler.startPreciseCoverage({
+        callCount: true,
+        detailed: true,
+      });
 
       cdpClient = client;
       return;
@@ -47,31 +51,37 @@ async function connectToCDP() {
     }
   }
 
-  console.warn('[coverage] Could not connect to Chrome CDP after 30 s — coverage disabled.');
+  console.warn(
+    "[coverage] Could not connect to Chrome CDP after 30 s — coverage disabled.",
+  );
 }
 
-// Begin attempting to connect immediately when the module is loaded by testem.
 connectToCDP();
 
-export default function coverageMiddleware(app) {
-  app.get('/_coverage', async (req, res) => {
-    if (!cdpClient) {
-      res.status(503).json({ error: 'CDP not connected' });
-      return;
-    }
+export function middleware(options = {}) {
+  return function coverageMiddleware(app) {
+    app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
+      if (!cdpClient) {
+        res.status(503).json({ error: "CDP not connected" });
+        return;
+      }
 
-    try {
-      const { result } = await cdpClient.Profiler.takePreciseCoverage();
-      fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result));
-      // Generate the report before responding. The browser's QUnit.done() async
-      // hook is still awaiting this response, so Chrome stays alive until we're
-      // done printing. Output goes to process.stdout of the testem process and
-      // appears directly in the terminal.
-      await generateReport(result);
-      res.json({ ok: true, scripts: result.length });
-    } catch (err) {
-      console.error('\n[coverage] Error generating report:', err.stack || err.message);
-      res.status(500).json({ error: err.message });
-    }
-  });
+      try {
+        const { result } = await cdpClient.Profiler.takePreciseCoverage();
+        fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result));
+        // Generate the report before responding. The browser's QUnit.done() async
+        // hook is still awaiting this response, so Chrome stays alive until we're
+        // done printing. Output goes to process.stdout of the testem process and
+        // appears directly in the terminal.
+        await generateReport(result);
+        res.json({ ok: true, scripts: result.length });
+      } catch (err) {
+        console.error(
+          "\n[coverage] Error generating report:",
+          err.stack || err.message,
+        );
+        res.status(500).json({ error: err.message });
+      }
+    });
+  };
 }

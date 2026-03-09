@@ -23,6 +23,10 @@ importers:
       v8-to-istanbul:
         specifier: ^9.3.0
         version: 9.3.0
+    devDependencies:
+      prettier:
+        specifier: ^3.8.1
+        version: 3.8.1
 
   test-scenarios/vite-app-js:
     devDependencies:

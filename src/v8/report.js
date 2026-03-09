@@ -8,30 +8,33 @@
  *                  (reads coverage-data.json written by coverage-middleware)
  */
 
-import path from 'node:path';
-import fs from 'node:fs';
-import { URL, fileURLToPath } from 'node:url';
-import v8ToIstanbul from 'v8-to-istanbul';
-import libCoverage from 'istanbul-lib-coverage';
-import libReport from 'istanbul-lib-report';
-import reports from 'istanbul-reports';
+import path from "node:path";
+import fs from "node:fs";
+import { URL, fileURLToPath } from "node:url";
+import v8ToIstanbul from "v8-to-istanbul";
+import libCoverage from "istanbul-lib-coverage";
+import libReport from "istanbul-lib-report";
+import reports from "istanbul-reports";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const DATA_FILE = path.join(__dirname, 'coverage-data.json');
-const DIST_DIR = path.join(__dirname, 'dist');
-const COVERAGE_DIR = path.join(__dirname, 'coverage');
+const DATA_FILE = path.join(__dirname, "coverage-data.json");
+const DIST_DIR = path.join(__dirname, "dist");
+const COVERAGE_DIR = path.join(__dirname, "coverage");
 
 export async function generateReport(v8Scripts) {
   // Only process local script files served by the testem dev server.
   const localScripts = v8Scripts.filter(
-    (s) => s.url && s.url.includes('://localhost') && s.url.endsWith('.js') &&
+    (s) =>
+      s.url &&
+      s.url.includes("://localhost") &&
+      s.url.endsWith(".js") &&
       // Skip testem's own injected runner
-      !s.url.includes('/testem.js')
+      !s.url.includes("/testem.js"),
   );
 
   if (localScripts.length === 0) {
-    console.log('\n[coverage] No local scripts found in coverage snapshot.');
+    console.log("\n[coverage] No local scripts found in coverage snapshot.");
     return;
   }
 
@@ -49,7 +52,7 @@ export async function generateReport(v8Scripts) {
     if (!fs.existsSync(filePath)) continue;
 
     try {
-      const source = fs.readFileSync(filePath, 'utf8');
+      const source = fs.readFileSync(filePath, "utf8");
       const converter = v8ToIstanbul(filePath, 0, { source });
       await converter.load();
       converter.applyCoverage(script.functions);
@@ -62,19 +65,21 @@ export async function generateReport(v8Scripts) {
   // Remove noise: node_modules and Embroider internals.
   const filteredMap = libCoverage.createCoverageMap({});
   for (const file of coverageMap.files()) {
-    if (!file.includes('node_modules') && !file.includes('/.embroider/')) {
+    if (!file.includes("node_modules") && !file.includes("/.embroider/")) {
       filteredMap.addFileCoverage(coverageMap.fileCoverageFor(file));
     }
   }
 
   if (filteredMap.files().length === 0) {
-    console.log('\n[coverage] No app-source coverage data after filtering — falling back to byte-level report.');
+    console.log(
+      "\n[coverage] No app-source coverage data after filtering — falling back to byte-level report.",
+    );
     printByteReport(localScripts);
     return;
   }
 
   // --- Terminal output ---
-  console.log('\n');
+  console.log("\n");
   const textContext = libReport.createContext({
     dir: COVERAGE_DIR,
     coverageMap: filteredMap,
@@ -85,13 +90,18 @@ export async function generateReport(v8Scripts) {
       lines: [50, 80],
     },
   });
-  reports.create('text').execute(textContext);
+  reports.create("text").execute(textContext);
 
   // --- HTML report ---
   fs.mkdirSync(COVERAGE_DIR, { recursive: true });
-  const htmlContext = libReport.createContext({ dir: COVERAGE_DIR, coverageMap: filteredMap });
-  reports.create('html').execute(htmlContext);
-  console.log(`\nHTML coverage report → ${path.join(COVERAGE_DIR, 'index.html')}\n`);
+  const htmlContext = libReport.createContext({
+    dir: COVERAGE_DIR,
+    coverageMap: filteredMap,
+  });
+  reports.create("html").execute(htmlContext);
+  console.log(
+    `\nHTML coverage report → ${path.join(COVERAGE_DIR, "index.html")}\n`,
+  );
 }
 
 /**
@@ -100,15 +110,15 @@ export async function generateReport(v8Scripts) {
  */
 function printByteReport(scripts) {
   const W = { file: 50, used: 8, total: 9, pct: 7 };
-  const sep = '─'.repeat(W.file + W.used + W.total + W.pct);
+  const sep = "─".repeat(W.file + W.used + W.total + W.pct);
 
-  console.log('\n\x1b[1mCoverage Summary (byte-level)\x1b[0m');
+  console.log("\n\x1b[1mCoverage Summary (byte-level)\x1b[0m");
   console.log(sep);
   console.log(
-    'File'.padEnd(W.file) +
-    'Used B'.padStart(W.used) +
-    'Total B'.padStart(W.total) +
-    '     %'.padStart(W.pct)
+    "File".padEnd(W.file) +
+      "Used B".padStart(W.used) +
+      "Total B".padStart(W.total) +
+      "     %".padStart(W.pct),
   );
   console.log(sep);
 
@@ -121,26 +131,27 @@ function printByteReport(scripts) {
     totalSize += totalBytes;
 
     const pct = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
-    const color = pct >= 80 ? '\x1b[32m' : pct >= 50 ? '\x1b[33m' : '\x1b[31m';
+    const color = pct >= 80 ? "\x1b[32m" : pct >= 50 ? "\x1b[33m" : "\x1b[31m";
     const displayName = new URL(script.url).pathname.slice(1); // strip leading /
 
     console.log(
       displayName.slice(-W.file).padEnd(W.file) +
-      usedBytes.toString().padStart(W.used) +
-      totalBytes.toString().padStart(W.total) +
-      `${color}${(pct + '%').padStart(W.pct)}\x1b[0m`
+        usedBytes.toString().padStart(W.used) +
+        totalBytes.toString().padStart(W.total) +
+        `${color}${(pct + "%").padStart(W.pct)}\x1b[0m`,
     );
   }
 
   console.log(sep);
-  const totalPct = totalSize > 0 ? Math.round((totalUsed / totalSize) * 100) : 0;
+  const totalPct =
+    totalSize > 0 ? Math.round((totalUsed / totalSize) * 100) : 0;
   console.log(
-    'Total'.padEnd(W.file) +
-    totalUsed.toString().padStart(W.used) +
-    totalSize.toString().padStart(W.total) +
-    (totalPct + '%').padStart(W.pct)
+    "Total".padEnd(W.file) +
+      totalUsed.toString().padStart(W.used) +
+      totalSize.toString().padStart(W.total) +
+      (totalPct + "%").padStart(W.pct),
   );
-  console.log('');
+  console.log("");
 }
 
 function computeBytecoverage(functions) {
@@ -175,20 +186,22 @@ function computeBytecoverage(functions) {
 // When invoked directly (node report.js), read from disk.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!fs.existsSync(DATA_FILE)) {
-    console.log('\n[coverage] No coverage data found (coverage-data.json missing).');
+    console.log(
+      "\n[coverage] No coverage data found (coverage-data.json missing).",
+    );
     process.exit(0);
   }
 
   let v8Scripts;
   try {
-    v8Scripts = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    v8Scripts = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
   } catch (err) {
     console.log(`\n[coverage] Failed to parse coverage data: ${err.message}`);
     process.exit(0);
   }
 
   generateReport(v8Scripts).catch((err) => {
-    console.error('[coverage] Unexpected error:', err);
+    console.error("[coverage] Unexpected error:", err);
     process.exit(0);
   });
 }

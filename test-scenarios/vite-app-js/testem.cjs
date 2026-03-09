@@ -1,7 +1,5 @@
 'use strict';
 
-const path = require('path');
-
 if (typeof module !== 'undefined') {
   module.exports = {
     test_page: 'tests/index.html?hidepassed',
@@ -10,7 +8,11 @@ if (typeof module !== 'undefined') {
     launch_in_ci: ['Chrome'],
     launch_in_dev: ['Chrome'],
     browser_start_timeout: 120,
-    middleware: [require(path.join(__dirname, 'coverage-middleware.cjs'))],
+    middleware: [
+      require('testem-code-coverage').middleware({
+        /* options here */
+      }),
+    ],
     browser_args: {
       Chrome: {
         ci: [
