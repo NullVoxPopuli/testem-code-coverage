@@ -75,6 +75,14 @@ require("testem-code-coverage").middleware({
   outputFolder: "coverage",
 
   /**
+   * Paths to include in the coverage report.
+   * By default, `node_modules` are excluded.
+   * But specifying library names here would allow you to track coverage
+   * of those libraries.
+   */
+  include: [],
+
+  /**
    * async callback that can be used to generate additional
    * report formats.
    *

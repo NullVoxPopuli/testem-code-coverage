@@ -79,7 +79,9 @@ export function middleware(options = {}) {
         // hook is still awaiting this response, so Chrome stays alive until we're
         // done printing. Output goes to process.stdout of the testem process and
         // appears directly in the terminal.
-        await generateReport(result);
+        await generateReport(result, {
+          coverageDir: outputhPath,
+        });
 
         await handleReport?.(result);
 

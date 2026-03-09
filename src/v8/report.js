@@ -19,9 +19,8 @@ import reports from "istanbul-reports";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DIST_DIR = path.join(__dirname, "dist");
-const COVERAGE_DIR = path.join(__dirname, "coverage");
 
-export async function generateReport(v8Scripts) {
+export async function generateReport(v8Scripts, options) {
   // Only process local script files served by the testem dev server.
   const localScripts = v8Scripts.filter(
     (s) =>
@@ -80,7 +79,7 @@ export async function generateReport(v8Scripts) {
   // --- Terminal output ---
   console.log("\n");
   const textContext = libReport.createContext({
-    dir: COVERAGE_DIR,
+    dir: options.coverageDir,
     coverageMap: filteredMap,
     watermarks: {
       statements: [50, 80],
