@@ -1,5 +1,5 @@
-import EmberRouter from '@embroider/router';
-import config from 'ember-chrome-coverage-demo/config/environment';
+import EmberRouter from "@embroider/router";
+import config from "vite-app-js/config/environment";
 
 export default class Router extends EmberRouter {
   location = config.locationType;

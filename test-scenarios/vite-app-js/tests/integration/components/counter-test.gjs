@@ -1,7 +1,7 @@
 import { module, test } from 'qunit';
-import { setupRenderingTest } from 'ember-chrome-coverage-demo/tests/helpers';
+import { setupRenderingTest } from 'vite-app-js/tests/helpers';
 import { render, click } from '@ember/test-helpers';
-import Counter from 'ember-chrome-coverage-demo/components/counter';
+import Counter from 'vite-app-js/components/counter';
 
 module('Integration | Component | counter', function (hooks) {
   setupRenderingTest(hooks);

@@ -105,9 +105,6 @@ importers:
       babel-plugin-ember-template-compilation:
         specifier: ^3.1.0
         version: 3.1.0
-      chrome-remote-interface:
-        specifier: ^0.34.0
-        version: 0.34.0
       concurrently:
         specifier: ^9.2.1
         version: 9.2.1
@@ -168,15 +165,6 @@ importers:
       globals:
         specifier: ^16.5.0
         version: 16.5.0
-      istanbul-lib-coverage:
-        specifier: ^3.2.2
-        version: 3.2.2
-      istanbul-lib-report:
-        specifier: ^3.0.1
-        version: 3.0.1
-      istanbul-reports:
-        specifier: ^3.1.7
-        version: 3.2.0
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
@@ -198,9 +186,9 @@ importers:
       testem:
         specifier: ^3.17.0
         version: 3.17.0(ejs@3.1.10)(handlebars@4.7.8)(underscore@1.13.8)
-      v8-to-istanbul:
-        specifier: ^9.3.0
-        version: 9.3.0
+      testem-code-coverage:
+        specifier: workspace:*
+        version: link:../..
       vite:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@25.4.0)(terser@5.46.0)

@@ -14,6 +14,7 @@
  * has already been connected and coverage is active.
  */
 
+import { isAbsolute, join } from "node:path";
 import fs from "node:fs";
 import CDP from "chrome-remote-interface";
 import { generateReport } from "#v8/report.js";
