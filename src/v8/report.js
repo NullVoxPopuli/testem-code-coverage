@@ -99,9 +99,7 @@ export async function generateReport(v8Scripts) {
     coverageMap: filteredMap,
   });
   reports.create("html").execute(htmlContext);
-  console.log(
-    `\nHTML coverage report → ${path.join(COVERAGE_DIR, "index.html")}\n`,
-  );
+  console.log(`\nHTML coverage report → ${path.join(COVERAGE_DIR, "index.html")}\n`);
 }
 
 /**
@@ -143,8 +141,7 @@ function printByteReport(scripts) {
   }
 
   console.log(sep);
-  const totalPct =
-    totalSize > 0 ? Math.round((totalUsed / totalSize) * 100) : 0;
+  const totalPct = totalSize > 0 ? Math.round((totalUsed / totalSize) * 100) : 0;
   console.log(
     "Total".padEnd(W.file) +
       totalUsed.toString().padStart(W.used) +
@@ -186,9 +183,7 @@ function computeBytecoverage(functions) {
 // When invoked directly (node report.js), read from disk.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!fs.existsSync(DATA_FILE)) {
-    console.log(
-      "\n[coverage] No coverage data found (coverage-data.json missing).",
-    );
+    console.log("\n[coverage] No coverage data found (coverage-data.json missing).");
     process.exit(0);
   }
 

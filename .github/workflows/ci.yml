@@ -18,4 +18,5 @@ jobs:
           node-version-file: package.json
           cache: pnpm
       - run: pnpm install
-      - run: pnpm lint:format
+      - run: pnpm format:check
+      - run: pnpm lint

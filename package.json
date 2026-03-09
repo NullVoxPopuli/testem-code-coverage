@@ -1,31 +1,29 @@
 {
   "name": "testem-code-coverage",
   "version": "1.0.0",
-  "type": "module",
   "description": "",
-  "exports": {
-    ".": "./src/testem/middleware.js",
-    "./qunit": "./src/adapters/qunit.js"
-  },
+  "keywords": [],
+  "license": "MIT",
+  "author": "",
+  "files": [
+    "src"
+  ],
+  "type": "module",
   "imports": {
     "#utils": "./src/utils.js",
     "#v8/*": "./src/v8/*"
   },
-  "files": [
-    "src"
-  ],
+  "exports": {
+    ".": "./src/testem/middleware.js",
+    "./qunit": "./src/adapters/qunit.js"
+  },
   "scripts": {
-    "lint:format": "prettier . --check",
-    "format": "prettier . --write",
+    "lint": "oxlint && pnpm format:check",
+    "lint:fix": "oxlint --fix && oxfmt",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
-  "engines": {
-    "node": "^22.19.0 || ^24.0.0"
-  },
-  "packageManager": "pnpm@10.31.0",
   "dependencies": {
     "chrome-remote-interface": "^0.34.0",
     "istanbul-lib-coverage": "^3.2.2",
@@ -34,6 +32,11 @@
     "v8-to-istanbul": "^9.3.0"
   },
   "devDependencies": {
-    "prettier": "^3.8.1"
-  }
+    "oxfmt": "latest",
+    "oxlint": "latest"
+  },
+  "engines": {
+    "node": "^22.19.0 || ^24.0.0"
+  },
+  "packageManager": "pnpm@10.31.0"
 }

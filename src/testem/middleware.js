@@ -51,24 +51,30 @@ async function connectToCDP() {
     }
   }
 
-  console.warn(
-    "[coverage] Could not connect to Chrome CDP after 30 s — coverage disabled.",
-  );
+  console.warn("[coverage] Could not connect to Chrome CDP after 30 s — coverage disabled.");
 }
 
 connectToCDP();
 
 export function middleware(options = {}) {
+  const { outputFolder = 'coverage', handleReport, chrome } = options;
+  const { connectionTimeout, rempoteDebuggingPort = 9222 } = chrome || {};
+
+  const cwd = process.cwd();
+
+  const outputPath = isAbsolute(outputFolder) ? outputFolder : join(cwd, outputFolder);
+  const outputFile = join(outputPath, 'coverage-data.json');
+
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
       if (!cdpClient) {
-        res.status(503).json({ error: "CDP not connected" });
+        res.status(503).json({ error: "Chrome DevTools not connected" });
         return;
       }
 
       try {
         const { result } = await cdpClient.Profiler.takePreciseCoverage();
-        fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result));
+        fs.writeFileSync(outputFile, JSON.stringify(result));
         // Generate the report before responding. The browser's QUnit.done() async
         // hook is still awaiting this response, so Chrome stays alive until we're
         // done printing. Output goes to process.stdout of the testem process and
@@ -76,10 +82,7 @@ export function middleware(options = {}) {
         await generateReport(result);
         res.json({ ok: true, scripts: result.length });
       } catch (err) {
-        console.error(
-          "\n[coverage] Error generating report:",
-          err.stack || err.message,
-        );
+        console.error("\n[coverage] Error generating report:", err.stack || err.message);
         res.status(500).json({ error: err.message });
       }
     });
