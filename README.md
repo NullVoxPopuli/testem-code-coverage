@@ -68,7 +68,7 @@ require('ember-code-coverage/testem')({
     /**
      * If a non-absolute path, this defaults to CWD + /coverage
      * and is the location where the coverage reports are output
-     * including: HTML, lcov,  
+     * including: HTML  
      */
     outputFolder: 'coverage',
 
