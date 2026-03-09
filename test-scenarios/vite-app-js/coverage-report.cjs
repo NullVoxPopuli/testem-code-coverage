@@ -1,28 +1,24 @@
+'use strict';
+
 /**
  * Converts a V8 precise coverage snapshot into an Istanbul coverage report.
  *
  * Usage:
- *   - As a module: import { generateReport } from './report.js';
+ *   - As a module: const { generateReport } = require('./coverage-report.cjs');
  *                  await generateReport(v8Scripts);
- *   - Standalone:  node report.js
- *                  (reads coverage-data.json written by coverage-middleware)
+ *   - Standalone:  node coverage-report.cjs
+ *                  (reads coverage-data.json written by coverage-middleware.cjs)
  */
 
-import path from 'node:path';
-import fs from 'node:fs';
-import { URL, fileURLToPath } from 'node:url';
-import v8ToIstanbul from 'v8-to-istanbul';
-import libCoverage from 'istanbul-lib-coverage';
-import libReport from 'istanbul-lib-report';
-import reports from 'istanbul-reports';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const path = require('path');
+const fs = require('fs');
+const url = require('url');
 
 const DATA_FILE = path.join(__dirname, 'coverage-data.json');
 const DIST_DIR = path.join(__dirname, 'dist');
 const COVERAGE_DIR = path.join(__dirname, 'coverage');
 
-export async function generateReport(v8Scripts) {
+async function generateReport(v8Scripts) {
   // Only process local script files served by the testem dev server.
   const localScripts = v8Scripts.filter(
     (s) => s.url && s.url.includes('://localhost') && s.url.endsWith('.js') &&
@@ -35,12 +31,25 @@ export async function generateReport(v8Scripts) {
     return;
   }
 
+  let v8ToIstanbul, libCoverage, libReport, reports;
+  try {
+    v8ToIstanbul = require('v8-to-istanbul');
+    libCoverage = require('istanbul-lib-coverage');
+    libReport = require('istanbul-lib-report');
+    reports = require('istanbul-reports');
+  } catch (err) {
+    console.log(`\n[coverage] Missing Istanbul packages: ${err.message}`);
+    console.log('[coverage] Run: pnpm add -D v8-to-istanbul istanbul-lib-coverage istanbul-lib-report istanbul-reports');
+    printByteReport(localScripts);
+    return;
+  }
+
   const coverageMap = libCoverage.createCoverageMap({});
 
   for (const script of localScripts) {
     let filePath;
     try {
-      const parsed = new URL(script.url);
+      const parsed = new url.URL(script.url);
       filePath = path.join(DIST_DIR, parsed.pathname);
     } catch {
       continue;
@@ -122,7 +131,7 @@ function printByteReport(scripts) {
 
     const pct = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
     const color = pct >= 80 ? '\x1b[32m' : pct >= 50 ? '\x1b[33m' : '\x1b[31m';
-    const displayName = new URL(script.url).pathname.slice(1); // strip leading /
+    const displayName = new url.URL(script.url).pathname.slice(1); // strip leading /
 
     console.log(
       displayName.slice(-W.file).padEnd(W.file) +
@@ -172,8 +181,8 @@ function computeBytecoverage(functions) {
   return { usedBytes, totalBytes: maxEnd };
 }
 
-// When invoked directly (node report.js), read from disk.
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// When invoked directly (node coverage-report.cjs), read from disk.
+if (require.main === module) {
   if (!fs.existsSync(DATA_FILE)) {
     console.log('\n[coverage] No coverage data found (coverage-data.json missing).');
     process.exit(0);
@@ -192,3 +201,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(0);
   });
 }
+
+module.exports = { generateReport };

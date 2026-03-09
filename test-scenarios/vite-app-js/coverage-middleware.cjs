@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Testem middleware that:
  *  1. Connects to Chrome via the DevTools Protocol (CDP) as soon as Chrome is
@@ -14,13 +16,9 @@
  * has already been connected and coverage is active.
  */
 
-import path from 'node:path';
-import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import CDP from 'chrome-remote-interface';
-import { generateReport } from './coverage-report.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const path = require('path');
+const fs = require('fs');
+const { generateReport } = require('./coverage-report.cjs');
 
 const CDP_PORT = 9222;
 const OUTPUT_FILE = path.join(__dirname, 'coverage-data.json');
@@ -28,6 +26,14 @@ const OUTPUT_FILE = path.join(__dirname, 'coverage-data.json');
 let cdpClient = null;
 
 async function connectToCDP() {
+  let CDP;
+  try {
+    CDP = require('chrome-remote-interface');
+  } catch {
+    console.warn('[coverage] chrome-remote-interface not installed — coverage disabled.');
+    return;
+  }
+
   // Chrome takes a moment to start; retry until it accepts a connection.
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
@@ -53,7 +59,7 @@ async function connectToCDP() {
 // Begin attempting to connect immediately when the module is loaded by testem.
 connectToCDP();
 
-export default function coverageMiddleware(app) {
+module.exports = function coverageMiddleware(app) {
   app.get('/_coverage', async (req, res) => {
     if (!cdpClient) {
       res.status(503).json({ error: 'CDP not connected' });
@@ -74,4 +80,4 @@ export default function coverageMiddleware(app) {
       res.status(500).json({ error: err.message });
     }
   });
-}
+};

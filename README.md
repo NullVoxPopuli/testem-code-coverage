@@ -14,8 +14,19 @@ Setup the testem middleware
 // testem.cjs
 module.exports = {
     // ...
-    middleware: [require('ember-code-coverage/testem')]
+    middleware: [require('ember-code-coverage/testem')({
+        /* optional config here */ 
+    })],
     // ...
+    browser_args: {
+        Chrome: {
+            ci: [
+                // ...
+                '--remote-debugging-port=9222',
+                // ...
+            ]
+        }
+    }
 }
 ```
 
