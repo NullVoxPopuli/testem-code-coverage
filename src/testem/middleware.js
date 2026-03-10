@@ -2,16 +2,34 @@
  * Testem middleware that:
  *  1. Connects to Chrome via the DevTools Protocol (CDP) as soon as Chrome is
  *     ready, enabling precise coverage collection.
- *  2. Exposes GET /_coverage — called by the QUnit.done() async hook in
+ *  2. Reloads the page after enabling coverage so V8 tracks every byte from
+ *     the very first script execution (see note below).
+ *  3. Exposes GET /_coverage — called by the QUnit.done() async hook in
  *     test-helper.js. QUnit awaits all done() callbacks before emitting the
  *     final TAP summary line, which is what gates Chrome's shutdown. So this
  *     handler completing is exactly what keeps Chrome alive long enough to
  *     write coverage-data.json before testem kills it.
  *
- * Note: no /_coverage-ready handshake is needed. This middleware is loaded
- * when testem reads its config, which is before Chrome even launches. By the
- * time Chrome starts and the 2.5 MB test bundle is parsed and executed, CDP
- * has already been connected and coverage is active.
+ * Why the reload is required
+ * --------------------------
+ * CDP connects to the *page* target, which only becomes available after
+ * Chrome has already navigated to the test URL and begun parsing the bundle.
+ * If startPreciseCoverage() is called after the scripts have already been
+ * parsed and the module-level code has already run:
+ *
+ *   • V8 emits no top-level function entry (startOffset=0) for the bundle.
+ *   • Functions that are defined but never subsequently called (e.g. an
+ *     unexercised class method like `clampedCount`) never appear in the
+ *     coverage snapshot at all.
+ *
+ * v8-to-istanbul initialises every source line with count=1 (covered) and
+ * only zeroes lines that appear in the V8 snapshot with an explicit count=0
+ * entry.  Lines that have no entry at all therefore stay green, so the
+ * never-called functions report 100 % coverage — a false positive.
+ *
+ * Calling Page.reload() after startPreciseCoverage() ensures the scripts run
+ * while coverage is already active, which produces the top-level function
+ * entry and correct count=0 entries for every uncalled function.
  */
 
 import { isAbsolute, join } from "node:path";
@@ -62,6 +80,14 @@ export function middleware(options = {}) {
 
       await client.Profiler.enable();
       await client.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
+
+      // Reload so the test scripts run while coverage is already active.
+      // This produces the top-level function entry (startOffset=0) that lets
+      // v8-to-istanbul correctly zero out every never-called function.
+      // Without the reload, functions that are defined but never called have
+      // no V8 record at all and remain at v8-to-istanbul's default count=1.
+      await client.Page.enable();
+      await client.Page.reload();
 
       cdpClient = client;
       return;

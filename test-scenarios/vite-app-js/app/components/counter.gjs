@@ -34,6 +34,10 @@ export default class Counter extends Component {
   }
 
   <template>
+    {{#if this.whatever}}
+      not tested
+    {{/if}}
+
     <div data-test-counter>
       <p data-test-label>{{this.label}}</p>
       <button data-test-increment type="button" {{on "click" this.increment}}>
