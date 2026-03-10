@@ -24,7 +24,7 @@ const CHECK_INTERVAL = 500; // ms
 
 export function middleware(options = {}) {
   const { outputFolder = "coverage", handleReport, chrome } = options;
-  const { connectionTimeout = 30_000, rempoteDebuggingPort = 9222 } = chrome || {};
+  const { connectionTimeout = 30_000, remoteDebuggingPort = 9222 } = chrome || {};
 
   const cwd = process.cwd();
   let cdpClient = null;
@@ -47,7 +47,14 @@ export function middleware(options = {}) {
     }
 
     try {
-      const client = await CDP({ port: rempoteDebuggingPort });
+      // Connect to the page target specifically (not the browser-level WebSocket)
+      // so that the Profiler domain covers the page's JavaScript V8 context.
+      const targets = await CDP.List({ port: remoteDebuggingPort });
+      const pageTarget = targets.find((t) => t.type === "page");
+
+      if (!pageTarget) throw new Error("no page target yet");
+
+      const client = await CDP({ port: remoteDebuggingPort, target: pageTarget.id });
 
       client.on("disconnect", () => {
         cdpClient = null;
@@ -81,7 +88,7 @@ export function middleware(options = {}) {
         // done printing. Output goes to process.stdout of the testem process and
         // appears directly in the terminal.
         await generateReport(result, {
-          coverageDir: outputhPath,
+          coverageDir: outputPath,
         });
 
         await handleReport?.(result);
