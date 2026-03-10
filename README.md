@@ -70,7 +70,7 @@ require("testem-code-coverage").middleware({
   /**
    * If a non-absolute path, this defaults to CWD + /coverage
    * and is the location where the coverage reports are output
-   * including: HTML, JSON
+   * including: HTML, JSON, and TXT
    */
   outputFolder: "coverage",
 
