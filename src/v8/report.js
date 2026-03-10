@@ -18,9 +18,9 @@ import reports from "istanbul-reports";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const DIST_DIR = path.join(__dirname, "dist");
-
-export async function generateReport(v8Scripts, options) {
+export async function generateReport(v8Scripts, options = {}) {
+  const distDir = options.distDir ?? path.join(process.cwd(), "dist");
+  const coverageDir = options.coverageDir ?? path.join(process.cwd(), "coverage");
   // Only process local script files served by the testem dev server.
   const localScripts = v8Scripts.filter(
     (s) =>
@@ -42,7 +42,7 @@ export async function generateReport(v8Scripts, options) {
     let filePath;
     try {
       const parsed = new URL(script.url);
-      filePath = path.join(DIST_DIR, parsed.pathname);
+      filePath = path.join(distDir, parsed.pathname);
     } catch {
       continue;
     }
@@ -79,7 +79,7 @@ export async function generateReport(v8Scripts, options) {
   // --- Terminal output ---
   console.log("\n");
   const textContext = libReport.createContext({
-    dir: options.coverageDir,
+    dir: coverageDir,
     coverageMap: filteredMap,
     watermarks: {
       statements: [50, 80],
@@ -91,13 +91,13 @@ export async function generateReport(v8Scripts, options) {
   reports.create("text").execute(textContext);
 
   // --- HTML report ---
-  fs.mkdirSync(COVERAGE_DIR, { recursive: true });
+  fs.mkdirSync(coverageDir, { recursive: true });
   const htmlContext = libReport.createContext({
-    dir: COVERAGE_DIR,
+    dir: coverageDir,
     coverageMap: filteredMap,
   });
   reports.create("html").execute(htmlContext);
-  console.log(`\nHTML coverage report → ${path.join(COVERAGE_DIR, "index.html")}\n`);
+  console.log(`\nHTML coverage report → ${path.join(coverageDir, "index.html")}\n`);
 }
 
 /**
