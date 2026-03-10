@@ -90,13 +90,17 @@ export async function generateReport(v8Scripts, options = {}) {
   });
   reports.create("text").execute(textContext);
 
-  // --- HTML report ---
+  // --- HTML + JSON summary reports ---
   fs.mkdirSync(coverageDir, { recursive: true });
-  const htmlContext = libReport.createContext({
+  const fileContext = libReport.createContext({
     dir: coverageDir,
     coverageMap: filteredMap,
   });
-  reports.create("html").execute(htmlContext);
+  reports.create("html").execute(fileContext);
+  // json-summary writes coverage-summary.json — consumed by integration tests.
+  reports.create("json-summary").execute(fileContext);
+  // text report written to file mirrors the terminal table output.
+  reports.create("text", { file: "coverage-summary.txt" }).execute(fileContext);
   console.log(`\nHTML coverage report → ${path.join(coverageDir, "index.html")}\n`);
 }
 

@@ -22,7 +22,8 @@
     "lint:fix": "oxlint --fix && oxfmt",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "chrome-remote-interface": "^0.34.0",
@@ -33,7 +34,8 @@
   },
   "devDependencies": {
     "oxfmt": "latest",
-    "oxlint": "latest"
+    "oxlint": "latest",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": "^22.19.0 || ^24.0.0"
