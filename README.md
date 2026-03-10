@@ -110,3 +110,36 @@ require("testem-code-coverage").middleware({
   },
 });
 ```
+
+## Caveats about the implementation details
+
+These are all internal things to this testem-code-coverage library
+
+### `Page.reload()` is required for accurate coverage
+
+After connecting to Chrome via CDP and calling `startPreciseCoverage`, this library reloads the page before the tests run. This is not optional — it is what makes function-level coverage correct.
+
+**Why:** testem launches Chrome with the test URL as a CLI argument, so Chrome navigates to the page _immediately on process start_. By the time CDP can connect (a page target only exists after Chrome has loaded the page), the test bundle has already been parsed and all module-level code has already executed — without any coverage tracking active.
+
+The consequence of skipping the reload:
+
+- V8 emits **no top-level function entry** (`startOffset=0`) for the bundle, because the module never ran while coverage was active.
+- Functions that are **defined but never called** (e.g. an untested class method) produce **no V8 record at all**. They are invisible to the coverage snapshot.
+- `v8-to-istanbul` initialises every source line with `count = 1` (covered) and only zeroes lines that appear in the V8 snapshot with an explicit `count = 0`. Lines with no entry stay green.
+- Result: uncalled functions report **100% coverage** — a silent false positive.
+
+Calling `Page.reload()` after `startPreciseCoverage` ensures the scripts run while coverage is already armed. V8 then produces the top-level function entry and correct `count = 0` sub-ranges for every uncalled function, which `v8-to-istanbul` uses to zero those lines out. This is the same pattern used by Puppeteer and Playwright for browser coverage.
+
+### There is no Chrome launch flag equivalent to `startPreciseCoverage`
+
+The CDP docs state: _"Coverage data for JavaScript executed **before** enabling precise code coverage may be incomplete."_ There is no `--js-flags` or other Chrome launch flag that replicates what `Profiler.startPreciseCoverage` does, because:
+
+- `startPreciseCoverage` prevents V8 from running optimized/lazy compilation and resets execution counters — these are runtime behaviors controlled on a live isolate via CDP.
+- Chrome launch flags control how the browser process starts, not V8's internal coverage state machine.
+- Node.js has `NODE_V8_COVERAGE` because it wraps the entire process startup; Chrome has no equivalent since the browser starts before any test harness can intercept it.
+
+The `Page.reload()` is the correct and only reliable approach for browser-based precise coverage via CDP.
+
+### testem has no hook between Chrome starting and the page loading
+
+testem's lifecycle hooks (`on_start`, `before_tests`) run on the server side before Chrome launches — the CDP page target does not yet exist at that point. Chrome is spawned with the test URL as the last CLI argument and navigates immediately, leaving no gap to intercept. There is no built-in way to run code between "Chrome process starts" and "Chrome loads the page" without patching testem itself.
