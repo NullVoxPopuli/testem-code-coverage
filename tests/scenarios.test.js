@@ -27,9 +27,7 @@ for (const name of scenarios) {
       await expect(JSON.stringify(summary, null, 2)).toMatchFileSnapshot(
         join(snapshotDir, "coverage-summary.json"),
       );
-      await expect(summaryText).toMatchFileSnapshot(
-        join(snapshotDir, "coverage-summary.txt"),
-      );
+      await expect(summaryText).toMatchFileSnapshot(join(snapshotDir, "coverage-summary.txt"));
     });
   });
 }
