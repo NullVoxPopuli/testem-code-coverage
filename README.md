@@ -143,3 +143,9 @@ The `Page.reload()` is the correct and only reliable approach for browser-based 
 ### testem has no hook between Chrome starting and the page loading
 
 testem's lifecycle hooks (`on_start`, `before_tests`) run on the server side before Chrome launches — the CDP page target does not yet exist at that point. Chrome is spawned with the test URL as the last CLI argument and navigates immediately, leaving no gap to intercept. There is no built-in way to run code between "Chrome process starts" and "Chrome loads the page" without patching testem itself.
+
+### Branch counts from V8 are non-deterministic
+
+V8 uses tiered JIT compilation: functions start in the **Ignition** interpreter and may be promoted to **Maglev** or **TurboFan** optimising compilers if they become "hot". The coverage ranges reported by `Profiler.takePreciseCoverage` reflect whichever tier each function is in at the moment coverage is collected. TurboFan can split a single `if` into multiple tracked ranges or collapse branches it proves are unreachable, so the total number of branch ranges varies between runs depending on which background optimisation thread fires before `takePreciseCoverage` is called.
+
+In practice, **line and function coverage for your own source files are stable** — those functions are called enough to consistently reach the same tier. The volatile numbers tend to appear in framework and vendor code (Ember internals, QUnit, test helpers) where tier-up is marginal. If you need deterministic snapshots, consider asserting only on `lines` and `functions` and omitting `branches`.
