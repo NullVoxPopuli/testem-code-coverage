@@ -50,9 +50,22 @@ export function middleware(options = {}) {
   const outputPath = isAbsolute(outputFolder) ? outputFolder : join(cwd, outputFolder);
   const outputFile = join(outputPath, "coverage-data.json");
 
+  // Set to true once startPreciseCoverage has been called. Used by the
+  // disconnect handler to know whether to attempt a post-reload reconnect.
+  let coverageStarted = false;
+
   let connectStart;
   let lastAttempt;
-  async function connectChromeDevTools() {
+
+  /**
+   * Connect (or reconnect) to Chrome DevTools.
+   *
+   * @param {boolean} skipReload - When true, skip startPreciseCoverage and
+   *   Page.reload(). Used when reconnecting after a reload-triggered disconnect:
+   *   V8 coverage persists across same-origin navigations in the same isolate,
+   *   so we only need a fresh CDP connection to call takePreciseCoverage().
+   */
+  async function connectChromeDevTools(skipReload = false) {
     lastAttempt = Date.now();
 
     if (!connectStart) {
@@ -76,23 +89,35 @@ export function middleware(options = {}) {
 
       client.on("disconnect", () => {
         cdpClient = null;
+        if (coverageStarted) {
+          // On Linux headless Chrome, Page.reload() closes the page target's
+          // WebSocket. Reconnect quickly (without reloading again) so that
+          // cdpClient is ready before /_coverage is called. V8 coverage state
+          // persists across same-origin navigations in the same isolate, so
+          // takePreciseCoverage() on the new connection still returns full data.
+          setTimeout(() => connectChromeDevTools(true), 100);
+        }
       });
 
       await client.Profiler.enable();
-      await client.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
 
-      // Reload so the test scripts run while coverage is already active.
-      // This produces the top-level function entry (startOffset=0) that lets
-      // v8-to-istanbul correctly zero out every never-called function.
-      // Without the reload, functions that are defined but never called have
-      // no V8 record at all and remain at v8-to-istanbul's default count=1.
-      await client.Page.enable();
-      await client.Page.reload();
+      if (!skipReload) {
+        await client.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
+        coverageStarted = true;
+
+        // Reload so the test scripts run while coverage is already active.
+        // This produces the top-level function entry (startOffset=0) that lets
+        // v8-to-istanbul correctly zero out every never-called function.
+        // Without the reload, functions that are defined but never called have
+        // no V8 record at all and remain at v8-to-istanbul's default count=1.
+        await client.Page.enable();
+        await client.Page.reload();
+      }
 
       cdpClient = client;
       return;
     } catch {
-      setTimeout(connectChromeDevTools, CHECK_INTERVAL);
+      setTimeout(() => connectChromeDevTools(skipReload), CHECK_INTERVAL);
     }
   }
 
