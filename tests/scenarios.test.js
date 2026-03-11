@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { readdirSync } from "node:fs";
+import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runScenario, readCoverageSummary, readCoverageSummaryText } from "./helpers.ts";
@@ -20,6 +20,8 @@ for (const name of scenarios) {
 
     test("coverage summary matches snapshot", async () => {
       runScenario(scenarioDir);
+
+      expect(existsSync(join(scenarioDir, "coverage")), "coverage directory was created").toBe(true);
 
       const summary = readCoverageSummary(scenarioDir);
       const summaryText = readCoverageSummaryText(scenarioDir);

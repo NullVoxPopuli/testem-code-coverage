@@ -108,6 +108,7 @@ export function middleware(options = {}) {
       try {
         const { result } = await cdpClient.Profiler.takePreciseCoverage();
 
+        fs.mkdirSync(outputPath, { recursive: true });
         fs.writeFileSync(outputFile, JSON.stringify(result));
         // Generate the report before responding. The browser's QUnit.done() async
         // hook is still awaiting this response, so Chrome stays alive until we're

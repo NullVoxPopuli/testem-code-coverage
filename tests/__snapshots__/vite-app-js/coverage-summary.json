@@ -19,10 +19,10 @@
       "pct": 76.47
     },
     "branches": {
-      "total": 31,
-      "covered": 23,
+      "total": 17,
+      "covered": 15,
       "skipped": 0,
-      "pct": 74.19
+      "pct": 88.23
     },
     "branchesTrue": {
       "total": 0,
@@ -77,10 +77,10 @@
       "pct": 86.66
     },
     "branches": {
-      "total": 3,
-      "covered": 2,
+      "total": 2,
+      "covered": 1,
       "skipped": 0,
-      "pct": 66.66
+      "pct": 50
     }
   },
   "-embroider-implicit-modules.js": {
@@ -155,8 +155,8 @@
       "pct": 100
     },
     "branches": {
-      "total": 1,
-      "covered": 1,
+      "total": 0,
+      "covered": 0,
       "skipped": 0,
       "pct": 100
     }
@@ -207,10 +207,10 @@
       "pct": 100
     },
     "branches": {
-      "total": 1,
+      "total": 0,
       "covered": 0,
       "skipped": 0,
-      "pct": 0
+      "pct": 100
     }
   },
   "app/components/counter.gjs": {
@@ -259,10 +259,10 @@
       "pct": 100
     },
     "branches": {
-      "total": 5,
+      "total": 0,
       "covered": 0,
       "skipped": 0,
-      "pct": 0
+      "pct": 100
     }
   },
   "app/services/store.js": {
@@ -363,8 +363,8 @@
       "pct": 100
     },
     "branches": {
-      "total": 1,
-      "covered": 1,
+      "total": 0,
+      "covered": 0,
       "skipped": 0,
       "pct": 100
     }
@@ -441,8 +441,8 @@
       "pct": 100
     },
     "branches": {
-      "total": 1,
-      "covered": 1,
+      "total": 0,
+      "covered": 0,
       "skipped": 0,
       "pct": 100
     }
@@ -467,8 +467,8 @@
       "pct": 100
     },
     "branches": {
-      "total": 2,
-      "covered": 2,
+      "total": 0,
+      "covered": 0,
       "skipped": 0,
       "pct": 100
     }
@@ -493,8 +493,8 @@
       "pct": 100
     },
     "branches": {
-      "total": 5,
-      "covered": 5,
+      "total": 4,
+      "covered": 4,
       "skipped": 0,
       "pct": 100
     }
@@ -519,8 +519,8 @@
       "pct": 100
     },
     "branches": {
-      "total": 4,
-      "covered": 4,
+      "total": 3,
+      "covered": 3,
       "skipped": 0,
       "pct": 100
     }
