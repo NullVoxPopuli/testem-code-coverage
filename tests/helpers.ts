@@ -50,7 +50,10 @@ export function readCoverageSummaryText(scenarioDir: string): string {
     .join("\n");
 }
 
-type FileCoverage = Record<string, { total: number; covered: number; skipped: number; pct: number }>;
+type FileCoverage = Record<
+  string,
+  { total: number; covered: number; skipped: number; pct: number }
+>;
 
 /** Remove branch metrics from a single file's coverage entry. */
 function dropBranches(entry: unknown): unknown {
