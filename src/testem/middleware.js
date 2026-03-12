@@ -385,7 +385,10 @@ export function middleware(options = {}) {
 
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
-      logInfo("/_coverage", `request received, cdpClient=${cdpClient ? "connected" : "null"}, reloadPending=${reloadPending}`);
+      logInfo(
+        "/_coverage",
+        `request received, cdpClient=${cdpClient ? "connected" : "null"}, reloadPending=${reloadPending}`,
+      );
 
       // Stale-request gate
       // ------------------
@@ -400,7 +403,10 @@ export function middleware(options = {}) {
       // newCoveragePromise. Then we close this stale connection gracefully.
       if (reloadPending) {
         reloadPending = false;
-        logInfo("/_coverage", "stale request (reload pending) — holding connection, waiting for post-reload coverage");
+        logInfo(
+          "/_coverage",
+          "stale request (reload pending) — holding connection, waiting for post-reload coverage",
+        );
         await Promise.race([
           newCoveragePromise ?? Promise.resolve(null),
           new Promise((resolve) => setTimeout(() => resolve(null), 15_000)),
@@ -435,7 +441,10 @@ export function middleware(options = {}) {
         // check at the top of the handler). Take the stale path now if so.
         if (reloadPending) {
           reloadPending = false;
-          logInfo("/_coverage", "stale request (detected after cdpClient wait) — holding connection");
+          logInfo(
+            "/_coverage",
+            "stale request (detected after cdpClient wait) — holding connection",
+          );
           await Promise.race([
             newCoveragePromise ?? Promise.resolve(null),
             new Promise((resolve) => setTimeout(() => resolve(null), 15_000)),

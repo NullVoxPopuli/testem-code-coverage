@@ -35,7 +35,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * data before passing to v8-to-istanbul so that never-called class methods are
  * correctly marked as uncovered.
  */
-function syntheticUncoveredMethods(source, v8Functions, filePath) {
+function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {}) {
   // Build a set of start offsets already present in V8 coverage data.
   // V8 uses the start of the method name as the startOffset (e.g., the 'i' in
   // 'increment()'), which matches acorn's MethodDefinition.start.
@@ -96,32 +96,54 @@ function syntheticUncoveredMethods(source, v8Functions, filePath) {
     if (!node || typeof node !== "object") return;
 
     if (node.type === "MethodDefinition" && node.value) {
-      // acorn's MethodDefinition.start matches V8's startOffset for the method
-      // (both point to the first character of the method name / 'get'/'set').
-      if (!knownStarts.has(node.start)) {
+      // V8 typically uses node.start (including the 'get'/'set' keyword) as the
+      // startOffset for getter/setter methods, matching acorn's MethodDefinition.start.
+      // However, some Chrome versions / platforms use node.key.start (the method name
+      // position, without the 'get'/'set' keyword prefix) instead. We check both to
+      // avoid false-positive synthetic entries when V8 uses key.start.
+      const kind = node.kind === "get" ? "get " : node.kind === "set" ? "set " : "";
+      const name =
+        node.key?.type === "Identifier"
+          ? node.key.name
+          : node.key?.type === "Literal"
+            ? String(node.key.value)
+            : "";
+      const methodLabel = `${kind}${name}`;
+      const keyStart = node.key?.start ?? node.start;
+      const inV8 = knownStarts.has(node.start) || knownStarts.has(keyStart);
+
+      if (!inV8) {
         // Determine whether this method maps to a local app source file.
         let isLocal = true; // default: include when no source map available
+        let origSource = null;
         if (tracer) {
           const { line, column } = offsetToLineCol(node.start);
           const orig = originalPositionFor(tracer, { line, column });
+          origSource = orig.source;
           isLocal = isLocalSource(orig.source);
         }
+        diag(
+          `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) not in V8 — local=${isLocal} source=${origSource}`,
+        );
 
         if (isLocal) {
-          const kind = node.kind === "get" ? "get " : node.kind === "set" ? "set " : "";
-          const name =
-            node.key?.type === "Identifier"
-              ? node.key.name
-              : node.key?.type === "Literal"
-                ? String(node.key.value)
-                : "";
           synthetic.push({
-            functionName: `${kind}${name}`,
+            functionName: methodLabel,
             // Use the full MethodDefinition range so the synthetic entry spans the
             // same bytes that V8 would have reported.
             ranges: [{ startOffset: node.start, endOffset: node.end, count: 0 }],
             isBlockCoverage: false,
           });
+        }
+      } else {
+        // Method IS in V8 — log its count for diagnostic purposes.
+        const v8fn = v8Functions.find(
+          (f) => f.ranges[0]?.startOffset === node.start || f.ranges[0]?.startOffset === keyStart,
+        );
+        if (v8fn) {
+          diag(
+            `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) in V8 count=${v8fn.ranges[0]?.count} name="${v8fn.functionName}"`,
+          );
         }
       }
     }
@@ -162,6 +184,13 @@ export async function generateReport(v8Scripts, options = {}) {
     return;
   }
 
+  const diagLines = [];
+  function diag(...args) {
+    const line = args.join(" ");
+    diagLines.push(line);
+    console.log("[coverage-diag]", line);
+  }
+
   const coverageMap = libCoverage.createCoverageMap({});
 
   for (const script of localScripts) {
@@ -177,15 +206,25 @@ export async function generateReport(v8Scripts, options = {}) {
 
     try {
       const source = fs.readFileSync(filePath, "utf8");
+      diag(
+        `script: ${script.url} — ${script.functions.length} V8 functions, covered: ${script.functions.filter((f) => f.ranges[0]?.count > 0).length}`,
+      );
+
       const converter = v8ToIstanbul(filePath, 0, { source });
       await converter.load();
       // Augment V8 data with synthetic count=0 entries for class methods that
       // V8 never compiled (never called) — they would otherwise default to the
       // parent scope's count=1, producing a false "100% covered" result.
-      const synth = syntheticUncoveredMethods(source, script.functions, filePath);
+      const synth = syntheticUncoveredMethods(source, script.functions, filePath, diag);
+      if (synth.length > 0) {
+        diag(
+          `  → ${synth.length} synthetic entries added: ${synth.map((s) => s.functionName).join(", ")}`,
+        );
+      }
       converter.applyCoverage([...script.functions, ...synth]);
       coverageMap.merge(converter.toIstanbul());
-    } catch {
+    } catch (err) {
+      diag(`  → ERROR processing ${script.url}: ${err.message}`);
       // If a file can't be processed (e.g. no source map), skip it silently.
     }
   }
@@ -222,6 +261,10 @@ export async function generateReport(v8Scripts, options = {}) {
 
   // --- HTML + JSON summary reports ---
   fs.mkdirSync(coverageDir, { recursive: true });
+
+  // Write diagnostic log for debugging cross-platform coverage differences.
+  fs.writeFileSync(path.join(coverageDir, "coverage-debug.log"), diagLines.join("\n") + "\n");
+
   const fileContext = libReport.createContext({
     dir: coverageDir,
     coverageMap: filteredMap,
