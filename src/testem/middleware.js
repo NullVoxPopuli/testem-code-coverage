@@ -30,6 +30,27 @@
  * Calling Page.reload() after startPreciseCoverage() ensures the scripts run
  * while coverage is already active, which produces the top-level function
  * entry and correct count=0 entries for every uncalled function.
+ *
+ * Browser-level vs page-level CDP connection
+ * ------------------------------------------
+ * On Linux headless Chrome, Page.reload() causes the renderer process to be
+ * replaced. The page target's DevTools WebSocket closes and the DevTools port
+ * (9222) temporarily refuses NEW connections (ECONNREFUSED) while the new
+ * renderer starts.
+ *
+ * The fix is to establish the browser-level CDP connection FIRST. The
+ * browser-level WebSocket is associated with the browser process (not any
+ * renderer), so it survives renderer restarts. We register
+ * Target.setAutoAttach({ waitForDebuggerOnStart: true }) on this connection
+ * BEFORE the reload. When the new renderer starts, Chrome delivers a
+ * Target.attachedToTarget event over the still-open browser-level WebSocket.
+ * We then open a fresh page-level connection to the new renderer, start
+ * precise coverage, and resume execution.
+ *
+ * On macOS Desktop Chrome, Page.reload() reuses the same renderer, so the
+ * page-level WebSocket never closes and the initial client remains valid.
+ * Target.attachedToTarget does not fire in this case, which is fine — the
+ * original client's coverage data is still accessible.
  */
 
 import { isAbsolute, join } from "node:path";
@@ -73,55 +94,51 @@ export function middleware(options = {}) {
     }
   }
 
-  // Set to true once startPreciseCoverage has been called. Used by the
-  // disconnect handler to know whether to attempt a post-reload reconnect.
-  let coverageStarted = false;
-
   let connectStart;
   let lastAttempt;
 
   /**
-   * Aggressively reconnect to the page target after a reload-triggered
-   * disconnect. Retries every 50 ms (instead of CHECK_INTERVAL) so cdpClient
-   * is restored well before /_coverage is hit by the test runner.
+   * Connect a fresh page-level CDP client to the given target, enable the
+   * Profiler domain, start precise coverage, and (if the target is paused
+   * by waitForDebuggerOnStart) resume execution.
    */
-  async function reconnectAfterReload() {
-    const deadline = Date.now() + connectionTimeout;
-    let attempts = 0;
-    while (Date.now() < deadline) {
-      try {
-        attempts++;
-        const targets = await CDP.List({ port: remoteDebuggingPort });
-        const pageTarget = targets.find((t) => t.type === "page");
-        if (!pageTarget) {
-          if (attempts === 1 || attempts % 20 === 0) {
-            logInfo("reconnectAfterReload", `attempt ${attempts}: no page target in list of ${targets.length} targets (types: ${targets.map((t) => t.type).join(",")})`);
-          }
-          throw new Error("no page target yet");
-        }
+  async function setupPageClient(targetId, { waitingForDebugger = false, startCoverage = true } = {}) {
+    const pageClient = await CDP({ port: remoteDebuggingPort, target: targetId });
 
-        logInfo("reconnectAfterReload", `attempt ${attempts}: found page target ${pageTarget.id}, connecting…`);
-        const newClient = await CDP({ port: remoteDebuggingPort, target: pageTarget.id });
-        newClient.on("disconnect", () => {
-          logInfo("reconnectAfterReload", "new client disconnected");
-          cdpClient = null;
-        });
-        await newClient.Profiler.enable();
-        cdpClient = newClient;
-        logInfo("reconnectAfterReload", `reconnected successfully after ${attempts} attempt(s)`);
-        return;
-      } catch (err) {
-        if (attempts === 1) logError("reconnectAfterReload attempt 1", err);
-        await new Promise((r) => setTimeout(r, 50));
-      }
+    pageClient.on("disconnect", () => {
+      logInfo("pageClient", `target ${targetId} disconnected`);
+      cdpClient = null;
+    });
+
+    await pageClient.Profiler.enable();
+
+    if (startCoverage) {
+      await pageClient.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
+      logInfo("setupPageClient", `precise coverage started on target ${targetId}`);
     }
-    console.warn("[coverage] Could not reconnect to Chrome after reload — coverage disabled.");
-    logError("reconnectAfterReload", new Error(`Timed out after ${attempts} attempts`));
+
+    cdpClient = pageClient;
+
+    if (waitingForDebugger) {
+      await pageClient.Runtime.runIfWaitingForDebugger();
+      logInfo("setupPageClient", `target ${targetId} resumed`);
+    }
+
+    return pageClient;
   }
 
   /**
-   * Connect to Chrome DevTools on initial startup. Retries every CHECK_INTERVAL
-   * ms until Chrome is ready or connectionTimeout elapses.
+   * Connect to Chrome DevTools.
+   *
+   * Strategy:
+   *  1. Establish a browser-level CDP connection (survives renderer restarts).
+   *  2. Register Target.setAutoAttach so new page targets are caught BEFORE
+   *     their scripts run (waitForDebuggerOnStart pauses them).
+   *  3. Connect to the existing page target, start coverage, and reload.
+   *     • macOS: same renderer reused — page-level WebSocket stays open.
+   *     • Linux: new renderer created — Target.attachedToTarget fires on the
+   *       still-open browser-level WebSocket; we connect and resume the new
+   *       page target with fresh coverage.
    */
   async function connectChromeDevTools() {
     lastAttempt = Date.now();
@@ -138,53 +155,68 @@ export function middleware(options = {}) {
     }
 
     try {
-      // Connect to the page target specifically (not the browser-level WebSocket)
-      // so that the Profiler domain covers the page's JavaScript V8 context.
-      const targets = await CDP.List({ port: remoteDebuggingPort });
-      const pageTarget = targets.find((t) => t.type === "page");
+      // 1. Browser-level connection — not tied to any page renderer.
+      //    Stays open even when the page target's WebSocket closes on reload.
+      //    We must use /json/version to get the browser's own WebSocket URL;
+      //    CDP({ port }) without a target connects to the first *page* target.
+      const version = await CDP.Version({ port: remoteDebuggingPort });
+      const browserWsUrl = version.webSocketDebuggerUrl;
+      if (!browserWsUrl) throw new Error("No webSocketDebuggerUrl in /json/version — Chrome may not expose the browser endpoint");
+      const browser = await CDP({ target: browserWsUrl });
+      logInfo("connectChromeDevTools", "browser-level connection established");
 
-      if (!pageTarget) throw new Error("no page target yet");
+      browser.on("disconnect", () => {
+        logInfo("browser", "browser-level connection closed");
+      });
 
-      const client = await CDP({ port: remoteDebuggingPort, target: pageTarget.id });
-
-      client.on("disconnect", () => {
-        cdpClient = null;
-        if (coverageStarted) {
-          // On Linux headless Chrome, Page.reload() closes the page target's
-          // DevTools WebSocket. Reconnect aggressively (no fixed delay, 50 ms
-          // retry loop) so cdpClient is restored before /_coverage is called.
-          // V8 precise coverage is an isolate-level setting and persists across
-          // same-origin navigations, so takePreciseCoverage() on the new
-          // connection still returns data collected since startPreciseCoverage().
-          logError("disconnect", new Error("Page target WebSocket closed after reload — starting reconnectAfterReload()"));
-          void reconnectAfterReload();
+      // 2. Auto-attach: when Chrome creates a new page target (e.g. after
+      //    Page.reload() spawns a new renderer on Linux), this event fires on
+      //    the still-open browser-level WebSocket. The target is paused before
+      //    any scripts run, giving us a clean slate for coverage.
+      browser.Target.attachedToTarget(async ({ targetInfo, waitingForDebugger }) => {
+        if (targetInfo.type !== "page") return;
+        logInfo("attachedToTarget", `new page target ${targetInfo.targetId}, waitingForDebugger=${waitingForDebugger}`);
+        try {
+          await setupPageClient(targetInfo.targetId, { waitingForDebugger, startCoverage: true });
+        } catch (err) {
+          logError("attachedToTarget handler", err);
         }
       });
 
-      await client.Profiler.enable();
-      await client.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
-      coverageStarted = true;
+      await browser.Target.setAutoAttach({
+        autoAttach: true,
+        waitForDebuggerOnStart: true,
+      });
+      logInfo("connectChromeDevTools", "setAutoAttach configured");
 
-      // Reload so the test scripts run while coverage is already active.
-      // This produces the top-level function entry (startOffset=0) that lets
-      // v8-to-istanbul correctly zero out every never-called function.
-      // Without the reload, functions that are defined but never called have
-      // no V8 record at all and remain at v8-to-istanbul's default count=1.
-      await client.Page.enable();
-      await client.Page.reload();
+      // 3. Find the existing page target (Chrome may have already loaded the page).
+      const targets = await CDP.List({ port: remoteDebuggingPort });
+      const pageTarget = targets.find((t) => t.type === "page");
 
-      cdpClient = client;
+      if (!pageTarget) {
+        // No page yet — attachedToTarget will fire when Chrome opens one.
+        logInfo("connectChromeDevTools", "no page target yet — waiting for attachedToTarget");
+        return;
+      }
+
+      logInfo("connectChromeDevTools", `existing page target: ${pageTarget.id} — starting coverage + reload`);
+
+      // Connect to the existing page target and start coverage.
+      const pageClient = await setupPageClient(pageTarget.id, { startCoverage: true });
+
+      // Reload so scripts run while coverage is active.
+      // On macOS: in-place reload, same WebSocket — cdpClient stays valid.
+      // On Linux: new renderer is created; the disconnect fires (cdpClient → null)
+      //           and Target.attachedToTarget fires on the browser-level WebSocket,
+      //           connecting to the new renderer and restoring cdpClient.
+      await pageClient.Page.enable();
+      await pageClient.Page.reload();
+      logInfo("connectChromeDevTools", "page reload sent");
+
       return;
     } catch (err) {
-      // If coverage was already started, the disconnect handler fired and
-      // reconnectAfterReload() is already taking care of reconnecting.
-      // Do NOT retry connectChromeDevTools() here — that would call
-      // startPreciseCoverage() + Page.reload() again, wiping coverage data.
-      if (!coverageStarted) {
-        setTimeout(() => connectChromeDevTools(), CHECK_INTERVAL);
-      } else {
-        logError("connectChromeDevTools (post-reload throw)", err);
-      }
+      logError("connectChromeDevTools", err);
+      setTimeout(() => connectChromeDevTools(), CHECK_INTERVAL);
     }
   }
 
@@ -192,7 +224,7 @@ export function middleware(options = {}) {
 
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
-      logInfo("/_coverage", `request received, cdpClient=${cdpClient ? "connected" : "null"}, coverageStarted=${coverageStarted}`);
+      logInfo("/_coverage", `request received, cdpClient=${cdpClient ? "connected" : "null"}`);
       // The page-target WebSocket may close at the same moment /_coverage is
       // called (disconnect and request arrive within 1 ms of each other on
       // Linux headless Chrome). Handle both cases with a single retry loop:
