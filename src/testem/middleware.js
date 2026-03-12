@@ -284,6 +284,10 @@ export function middleware(options = {}) {
       // Track whether we've already reloaded so we don't reload on subsequent
       // attachedToTarget events (e.g. if setAutoAttach auto-attaches multiple times).
       let reloadSent = false;
+      // The targetId of the dedicated coverage tab we open via createTarget.
+      // Set after createTarget resolves so we can filter out spurious
+      // attachedToTarget events from the old tab's about:blank renderer.
+      let coverageTabTargetId = null;
 
       // 2. Auto-attach with flatten:true — required for browser-level auto-attach.
       //    This fires attachedToTarget for ALL existing page targets immediately,
@@ -299,23 +303,45 @@ export function middleware(options = {}) {
           await session.Profiler.enable();
           await session.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
           logInfo("attachedToTarget", `coverage started on session ${sessionId}`);
-          cdpClient = session;
-
-          // Start proactive caching for the race-condition fallback.
-          if (cacheTimerHandle) clearTimeout(cacheTimerHandle);
-          coverageCache = null;
-          cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
 
           if (waitingForDebugger) {
-            // New renderer (or fresh tab) paused before any JS runs — scripts
-            // are paused. Resume now that coverage is active so the scripts run
-            // under coverage.
+            // New renderer (or fresh tab) paused before any JS runs.
+            // Only treat it as our coverage tab if it matches the target we
+            // created (coverageTabTargetId), OR if we haven't yet initiated a
+            // reload (initial tab paused on first load — unusual but possible).
+            if (coverageTabTargetId && targetInfo.targetId !== coverageTabTargetId) {
+              // Spurious waitingForDebugger=true: the old tab navigated to
+              // about:blank on Linux and spawned a new renderer. Don't adopt
+              // its session as cdpClient, just resume it so the tab is not
+              // stuck.
+              logInfo(
+                "attachedToTarget",
+                `ignoring spurious waitingForDebugger tab for target ${targetInfo.targetId} (expected ${coverageTabTargetId})`,
+              );
+              await session.Runtime.runIfWaitingForDebugger();
+              return;
+            }
+
+            cdpClient = session;
+
+            // Start proactive caching for the race-condition fallback.
+            if (cacheTimerHandle) clearTimeout(cacheTimerHandle);
+            coverageCache = null;
+            cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
+
             await session.Runtime.runIfWaitingForDebugger();
             // Clear the pending flag so the next /_coverage request (from the
             // new page's Testem.afterTests) is processed normally.
             reloadPending = false;
             logInfo("attachedToTarget", `session ${sessionId} resumed — coverage ready`);
           } else if (!reloadSent) {
+            cdpClient = session;
+
+            // Start proactive caching for the race-condition fallback.
+            if (cacheTimerHandle) clearTimeout(cacheTimerHandle);
+            coverageCache = null;
+            cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
+
             // Existing renderer (page already loaded, waitingForDebugger=false).
             // V8's startPreciseCoverage is reset when a new JavaScript context
             // is created on navigation, so a simple Page.reload() doesn't help
@@ -349,9 +375,15 @@ export function middleware(options = {}) {
             // Open a fresh tab at the test URL. With waitForDebuggerOnStart=true
             // the new tab pauses before any JS, giving us the
             // waitingForDebugger=true path above for correct coverage.
-            await browser.Target.createTarget({ url: testUrl });
+            // Save the targetId so we can ignore spurious attachedToTarget events
+            // from the old tab's about:blank renderer (Linux creates a new
+            // renderer process on cross-origin navigation).
+            const { targetId } = await browser.Target.createTarget({ url: testUrl });
+            coverageTabTargetId = targetId;
             logInfo("attachedToTarget", `new coverage tab opened for ${testUrl}`);
           }
+          // else: reloadSent=true, waitingForDebugger=false → ignore (could be
+          // a second auto-attach event for an already-handled target)
         } catch (err) {
           logError("attachedToTarget handler", err);
         }
