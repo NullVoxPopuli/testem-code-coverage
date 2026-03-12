@@ -31,11 +31,21 @@ export function setupCoverage(_qunitRef) {
       const keepAlive = setInterval(function () {}, 50);
       try {
         await fetch(REPORT_TO_MIDDLEWARE_PATH);
-      } catch {
-        // Best-effort: never fail the test run due to coverage errors.
-      } finally {
         clearInterval(keepAlive);
         next();
+      } catch (fetchErr) {
+        clearInterval(keepAlive);
+        // AbortError means the page is navigating away (e.g. due to
+        // Page.reload() triggered by the middleware to restart scripts under
+        // V8 coverage). In that case we must NOT call next() here — the new
+        // page will re-register Testem.afterTests and call next() after the
+        // coverage request completes.
+        //
+        // For any other error (network failure, middleware crash, etc.) we
+        // call next() as a best-effort fallback so the test run is not hung.
+        if (fetchErr && fetchErr.name !== "AbortError") {
+          next();
+        }
       }
     });
   } else {

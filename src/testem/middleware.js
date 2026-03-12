@@ -47,10 +47,19 @@
  * We then open a fresh page-level connection to the new renderer, start
  * precise coverage, and resume execution.
  *
- * On macOS Desktop Chrome, Page.reload() reuses the same renderer, so the
- * page-level WebSocket never closes and the initial client remains valid.
- * Target.attachedToTarget does not fire in this case, which is fine — the
- * original client's coverage data is still accessible.
+ * On macOS Desktop Chrome, Page.reload() reuses the same renderer process —
+ * no new target fires. Worse, V8's startPreciseCoverage state is reset when
+ * a new JavaScript context is created on navigation, so module scripts compile
+ * without precise coverage and never-called functions never appear in V8 output
+ * (false 100% coverage).
+ *
+ * Fix: instead of Page.reload(), navigate the existing tab to about:blank and
+ * then open a brand-new tab via Target.createTarget({ url: testUrl }).
+ * Because setAutoAttach({ waitForDebuggerOnStart: true }) is active, the new
+ * tab fires attachedToTarget(waitingForDebugger=true) before any JavaScript
+ * runs — including before any module is fetched or compiled. The existing
+ * waitingForDebugger=true handler calls startPreciseCoverage and resumes,
+ * so every module compiles under precise coverage from the very first byte.
  */
 
 import { isAbsolute, join } from "node:path";
@@ -193,12 +202,22 @@ export function middleware(options = {}) {
       },
       Page: {
         enable: () => browser.send("Page.enable", {}, sessionId),
-        reload: () =>
-            browser.send("Page.reload", { ignoreCache: true }, sessionId),
+        navigate: (params) => browser.send("Page.navigate", params, sessionId),
+        reload: () => browser.send("Page.reload", { ignoreCache: true }, sessionId),
+        addScriptToEvaluateOnNewDocument: (params) =>
+          browser.send("Page.addScriptToEvaluateOnNewDocument", params, sessionId),
+        removeScriptToEvaluateOnNewDocument: (params) =>
+          browser.send("Page.removeScriptToEvaluateOnNewDocument", params, sessionId),
       },
       Runtime: {
+        enable: () => browser.send("Runtime.enable", {}, sessionId),
         runIfWaitingForDebugger: () =>
           browser.send("Runtime.runIfWaitingForDebugger", {}, sessionId),
+      },
+      Debugger: {
+        enable: () => browser.send("Debugger.enable", {}, sessionId),
+        disable: () => browser.send("Debugger.disable", {}, sessionId),
+        resume: () => browser.send("Debugger.resume", {}, sessionId),
       },
     };
   }
@@ -288,18 +307,29 @@ export function middleware(options = {}) {
           cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
 
           if (waitingForDebugger) {
-            // New renderer after reload — scripts are paused. Resume now that
-            // coverage is active so the scripts run under coverage.
+            // New renderer (or fresh tab) paused before any JS runs — scripts
+            // are paused. Resume now that coverage is active so the scripts run
+            // under coverage.
             await session.Runtime.runIfWaitingForDebugger();
-            // Reload is complete on Linux — the new renderer is running.
             // Clear the pending flag so the next /_coverage request (from the
-            // new renderer's done()) is processed normally, not treated as stale.
+            // new page's Testem.afterTests) is processed normally.
             reloadPending = false;
             logInfo("attachedToTarget", `session ${sessionId} resumed — coverage ready`);
           } else if (!reloadSent) {
-            // Existing renderer (page already loaded). Reload so scripts run
-            // while coverage is active, producing correct count=0 entries for
-            // never-called functions instead of v8-to-istanbul's default count=1.
+            // Existing renderer (page already loaded, waitingForDebugger=false).
+            // V8's startPreciseCoverage is reset when a new JavaScript context
+            // is created on navigation, so a simple Page.reload() doesn't help
+            // on macOS — modules compile without coverage and never-called
+            // functions are invisible to V8 (false 100% coverage).
+            //
+            // Fix: navigate the existing tab to about:blank (to drop its testem
+            // socket.io connection and abort any pending /_coverage fetch), then
+            // open a FRESH tab via Target.createTarget. With
+            // waitForDebuggerOnStart=true already active in setAutoAttach, the
+            // new tab fires attachedToTarget(waitingForDebugger=true) before any
+            // JS runs — before any module is fetched or compiled. The branch
+            // above then calls startPreciseCoverage + runIfWaitingForDebugger,
+            // giving correct coverage for every function including never-called ones.
             reloadSent = true;
             // Set reloadPending and create the coordination promise BEFORE any
             // await, so /_coverage handlers that wake up during Page.enable()
@@ -308,9 +338,19 @@ export function middleware(options = {}) {
             newCoveragePromise = new Promise((resolve) => {
               newCoverageResolve = resolve;
             });
+            const testUrl = targetInfo.url;
             await session.Page.enable();
-            await session.Page.reload();
-            logInfo("attachedToTarget", `page reload sent for session ${sessionId}`);
+
+            // Navigate the current tab away so its Testem.afterTests fetch
+            // gets AbortError (the adapter then skips calling next(), preventing
+            // premature SIGTERM before the new tab's coverage is collected).
+            session.Page.navigate({ url: "about:blank" }).catch(() => {});
+
+            // Open a fresh tab at the test URL. With waitForDebuggerOnStart=true
+            // the new tab pauses before any JS, giving us the
+            // waitingForDebugger=true path above for correct coverage.
+            await browser.Target.createTarget({ url: testUrl });
+            logInfo("attachedToTarget", `new coverage tab opened for ${testUrl}`);
           }
         } catch (err) {
           logError("attachedToTarget handler", err);

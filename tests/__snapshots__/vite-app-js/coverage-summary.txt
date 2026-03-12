@@ -1,31 +1,28 @@
 -------------------|---------|---------|---------
 File               | % Stmts | % Funcs | % Lines 
 -------------------|---------|---------|---------
-All files          |   96.57 |   76.47 |   96.57 
+All files          |   93.43 |      75 |   93.43 
  src               |     100 |     100 |     100 
   utils.js         |     100 |     100 |     100 
- src/adapters      |   86.66 |     100 |   86.66 
-  qunit.js         |   86.66 |     100 |   86.66 
+ src/adapters      |      75 |     100 |      75 
+  qunit.js         |      75 |     100 |      75 
  ...os/vite-app-js |     100 |     100 |     100 
   ...it-modules.js |     100 |     100 |     100 
- ...ite-app-js/app |     100 |      50 |     100 
+ ...ite-app-js/app |     100 |     100 |     100 
   ...entrypoint.js |     100 |     100 |     100 
   app.js           |     100 |     100 |     100 
   ...n-workflow.js |     100 |     100 |     100 
-  router.js        |     100 |       0 |     100 
- ...app/components |   85.41 |   71.42 |   85.41 
-  counter.gjs      |   85.41 |   71.42 |   85.41 
+  router.js        |     100 |     100 |     100 
+ ...app/components |   85.41 |   66.66 |   85.41 
+  counter.gjs      |   85.41 |   66.66 |   85.41 
  ...-js/app/config |     100 |     100 |     100 
   environment.js   |     100 |     100 |     100 
  ...s/app/services |     100 |     100 |     100 
   store.js         |     100 |     100 |     100 
- .../app/templates |   91.66 |       0 |   91.66 
-  application.gjs  |   91.66 |       0 |   91.66 
+ .../app/templates |     100 |     100 |     100 
+  application.gjs  |     100 |     100 |     100 
  ...p-js/app/utils |   83.33 |     100 |   83.33 
   format-score.js  |   83.33 |     100 |   83.33 
- ...roider/virtual |     100 |     100 |     100 
-  test-support.js  |     100 |     100 |     100 
-  vendor.js        |     100 |     100 |     100 
  ...e-app-js/tests |     100 |     100 |     100 
   ...xy&index=1.js |     100 |     100 |     100 
   test-helper.js   |     100 |     100 |     100 

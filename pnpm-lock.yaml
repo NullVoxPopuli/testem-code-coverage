@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@jridgewell/trace-mapping':
+        specifier: ^0.3.31
+        version: 0.3.31
+      acorn:
+        specifier: ^8.16.0
+        version: 8.16.0
       chrome-remote-interface:
         specifier: ^0.34.0
         version: 0.34.0

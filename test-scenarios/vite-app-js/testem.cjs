@@ -25,6 +25,9 @@ if (typeof module !== "undefined") {
           "--remote-debugging-port=9222",
           "--window-size=1440,900",
         ].filter(Boolean),
+        dev: [
+          "--remote-debugging-port=9222",
+        ],
       },
     },
   };

@@ -26,6 +26,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
+    "acorn": "^8.16.0",
     "chrome-remote-interface": "^0.34.0",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
