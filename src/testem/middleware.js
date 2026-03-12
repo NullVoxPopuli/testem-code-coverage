@@ -68,6 +68,46 @@ export function middleware(options = {}) {
   const cwd = process.cwd();
   let cdpClient = null;
 
+  // Reload-pending gate — prevents the pre-reload QUnit done() from collecting
+  // stale coverage data and triggering TAP output before the new page runs.
+  //
+  // Problem
+  // -------
+  // By the time the middleware establishes a CDP connection (~4 s on slow starts),
+  // the page has ALREADY loaded and run all tests. QUnit's done() callback has
+  // already sent a fetch('/_coverage') that is queued in the /_coverage retry
+  // loop waiting for cdpClient to become available.
+  //
+  // When cdpClient is finally set (after startPreciseCoverage + before reload),
+  // this stale /_coverage handler immediately calls takePreciseCoverage() and
+  // gets pre-reload data: functions that were lazily compiled (never called)
+  // don't appear in V8's registry, so v8-to-istanbul defaults them to covered=1
+  // — the original false-positive bug.
+  //
+  // The reload was supposed to fix this (re-run scripts with coverage active),
+  // but the stale handler collects coverage BEFORE the reload completes and the
+  // new page's done() fires — and then responds with { ok: true }, QUnit emits
+  // final TAP, testem kills Chrome, and the new page never runs.
+  //
+  // Solution
+  // --------
+  // Set reloadPending=true synchronously (before any await) when a reload is
+  // triggered. Any /_coverage request that arrives while reloadPending=true is
+  // the stale pre-reload handler — it waits on newCoveragePromise instead of
+  // collecting coverage itself.
+  //
+  // On macOS (in-place reload, same session): the new page's done() sends a
+  // fresh /_coverage request after its tests run; that new handler processes
+  // coverage, resolves newCoveragePromise, and the stale handler then closes.
+  //
+  // On Linux (new renderer after reload): attachedToTarget fires with
+  // waitingForDebugger:true; we resume and set reloadPending=false; the new
+  // renderer's done() sends /_coverage, which is processed normally (stale
+  // handler is already waiting on the promise and resolves when new does).
+  let reloadPending = false;
+  let newCoverageResolve = null;
+  let newCoveragePromise = null;
+
   const outputPath = isAbsolute(outputFolder) ? outputFolder : join(cwd, outputFolder);
   const outputFile = join(outputPath, "coverage-data.json");
   const errorLog = join(outputPath, "errors.log");
@@ -94,6 +134,45 @@ export function middleware(options = {}) {
     }
   }
 
+  // Proactive coverage cache — refreshed every CACHE_INTERVAL ms while tests
+  // are running. Used as a fallback in /_coverage if Chrome exits before the
+  // live takePreciseCoverage() call can complete.
+  //
+  // Why this is needed (Linux headless Chrome SIGTERM race)
+  // -------------------------------------------------------
+  // Testem sends SIGTERM to Chrome almost immediately (~14ms) after receiving
+  // the final TAP line. Even with a keepAlive timer in the QUnit adapter,
+  // Chrome may begin the shutdown sequence before the live takePreciseCoverage
+  // CDP call completes. The proactive cache is taken every CACHE_INTERVAL ms
+  // throughout the test run, so there is always a recent snapshot available as
+  // a fallback when the live call fails.
+  //
+  // V8 precise coverage counters are CUMULATIVE from startPreciseCoverage().
+  // Any snapshot taken after all tests have finished will therefore contain the
+  // complete coverage picture. If the last cache was taken 0–CACHE_INTERVAL ms
+  // before /_coverage arrived, and tests finished >CACHE_INTERVAL ms before
+  // /_coverage, the cache is complete. For the vast majority of test suites
+  // (tests take at least a few hundred ms), this window is comfortably covered.
+  const CACHE_INTERVAL = 100; // ms
+  let coverageCache = null;
+  let cacheTimerHandle = null;
+
+  async function refreshCoverageCache() {
+    if (!cdpClient) return;
+    try {
+      const { result } = await cdpClient.Profiler.takePreciseCoverage();
+      if (result) {
+        coverageCache = result;
+      }
+    } catch {
+      // Ignore — will retry on next interval
+    }
+    // Schedule the next refresh only if cdpClient is still alive.
+    if (cdpClient) {
+      cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
+    }
+  }
+
   let connectStart;
   let lastAttempt;
 
@@ -114,7 +193,8 @@ export function middleware(options = {}) {
       },
       Page: {
         enable: () => browser.send("Page.enable", {}, sessionId),
-        reload: () => browser.send("Page.reload", {}, sessionId),
+        reload: () =>
+            browser.send("Page.reload", { ignoreCache: true }, sessionId),
       },
       Runtime: {
         runIfWaitingForDebugger: () =>
@@ -202,16 +282,32 @@ export function middleware(options = {}) {
           logInfo("attachedToTarget", `coverage started on session ${sessionId}`);
           cdpClient = session;
 
+          // Start proactive caching for the race-condition fallback.
+          if (cacheTimerHandle) clearTimeout(cacheTimerHandle);
+          coverageCache = null;
+          cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
+
           if (waitingForDebugger) {
             // New renderer after reload — scripts are paused. Resume now that
             // coverage is active so the scripts run under coverage.
             await session.Runtime.runIfWaitingForDebugger();
-            logInfo("attachedToTarget", `session ${sessionId} resumed`);
+            // Reload is complete on Linux — the new renderer is running.
+            // Clear the pending flag so the next /_coverage request (from the
+            // new renderer's done()) is processed normally, not treated as stale.
+            reloadPending = false;
+            logInfo("attachedToTarget", `session ${sessionId} resumed — coverage ready`);
           } else if (!reloadSent) {
             // Existing renderer (page already loaded). Reload so scripts run
             // while coverage is active, producing correct count=0 entries for
             // never-called functions instead of v8-to-istanbul's default count=1.
             reloadSent = true;
+            // Set reloadPending and create the coordination promise BEFORE any
+            // await, so /_coverage handlers that wake up during Page.enable()
+            // already see reloadPending=true and take the stale-request path.
+            reloadPending = true;
+            newCoveragePromise = new Promise((resolve) => {
+              newCoverageResolve = resolve;
+            });
             await session.Page.enable();
             await session.Page.reload();
             logInfo("attachedToTarget", `page reload sent for session ${sessionId}`);
@@ -249,7 +345,37 @@ export function middleware(options = {}) {
 
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
-      logInfo("/_coverage", `request received, cdpClient=${cdpClient ? "connected" : "null"}`);
+      logInfo("/_coverage", `request received, cdpClient=${cdpClient ? "connected" : "null"}, reloadPending=${reloadPending}`);
+
+      // Stale-request gate
+      // ------------------
+      // reloadPending is true between the moment we send Page.reload() and the
+      // moment the new page's /_coverage request is processed. Any request that
+      // arrives while the flag is set came from the pre-reload test run — its
+      // coverage data is useless (scripts hadn't run under coverage yet).
+      //
+      // We hold this stale connection open (the QUnit adapter's keepAlive timer
+      // keeps Chrome alive while the fetch is pending) and wait for the new
+      // page's /_coverage handler to collect correct coverage and resolve
+      // newCoveragePromise. Then we close this stale connection gracefully.
+      if (reloadPending) {
+        reloadPending = false;
+        logInfo("/_coverage", "stale request (reload pending) — holding connection, waiting for post-reload coverage");
+        await Promise.race([
+          newCoveragePromise ?? Promise.resolve(null),
+          new Promise((resolve) => setTimeout(() => resolve(null), 15_000)),
+        ]);
+        // The new page's handler already wrote the report. Just close the
+        // stale connection — the response will likely go to a dead page (the
+        // old page navigated away), but res.json() is harmless either way.
+        try {
+          res.json({ ok: true, stale: true });
+        } catch {
+          // ignore — stale connection already closed by Chrome
+        }
+        return;
+      }
+
       // cdpClient may be null if the page session was destroyed mid-request
       // (detachedFromTarget fired) and the new session's attachedToTarget hasn't
       // fired yet. The retry loop waits up to 10 s for cdpClient to be restored
@@ -263,13 +389,50 @@ export function middleware(options = {}) {
         }
         if (!cdpClient) break;
 
+        // Re-check reloadPending here: the flag may have been set while we
+        // were waiting for cdpClient above (the /_coverage request arrived
+        // before the middleware connected to CDP, so it missed the entry-point
+        // check at the top of the handler). Take the stale path now if so.
+        if (reloadPending) {
+          reloadPending = false;
+          logInfo("/_coverage", "stale request (detected after cdpClient wait) — holding connection");
+          await Promise.race([
+            newCoveragePromise ?? Promise.resolve(null),
+            new Promise((resolve) => setTimeout(() => resolve(null), 15_000)),
+          ]);
+          try {
+            res.json({ ok: true, stale: true });
+          } catch {
+            // ignore — connection likely already closed by the navigating page
+          }
+          return;
+        }
+
         try {
           const { result } = await cdpClient.Profiler.takePreciseCoverage();
           logInfo("/_coverage", `takePreciseCoverage succeeded: ${result.length} scripts`);
           coverageResult = result;
+          // Resolve the stale-request gate so any waiting pre-reload /_coverage
+          // handler can close its connection now that we have correct coverage.
+          if (newCoverageResolve) {
+            newCoverageResolve(result);
+            newCoverageResolve = null;
+          }
           break;
         } catch (err) {
           logError("takePreciseCoverage (will retry after reconnect)", err);
+          // Chrome may have exited (SIGTERM race). Try the proactive cache
+          // before giving up — it is refreshed every CACHE_INTERVAL ms and
+          // will be complete if tests finished more than CACHE_INTERVAL ms ago.
+          if (coverageCache) {
+            logInfo("/_coverage", `using cached coverage (${coverageCache.length} scripts)`);
+            coverageResult = coverageCache;
+            if (newCoverageResolve) {
+              newCoverageResolve(coverageCache);
+              newCoverageResolve = null;
+            }
+            break;
+          }
           // The WebSocket likely closed simultaneously. The disconnect handler
           // will null out cdpClient and start reconnectAfterReload(); give it
           // a moment then loop back to the wait above.
