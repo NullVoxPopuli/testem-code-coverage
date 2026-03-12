@@ -51,6 +51,17 @@ export function middleware(options = {}) {
   const outputFile = join(outputPath, "coverage-data.json");
   const errorLog = join(outputPath, "errors.log");
 
+  function logInfo(label, msg) {
+    const line = `[${new Date().toISOString()}] INFO ${label}: ${msg}\n`;
+    process.stderr.write(line);
+    try {
+      fs.mkdirSync(outputPath, { recursive: true });
+      fs.appendFileSync(errorLog, line);
+    } catch {
+      // stderr fallback above
+    }
+  }
+
   function logError(label, err) {
     const line = `[${new Date().toISOString()}] ${label}: ${err?.stack ?? err?.message ?? String(err)}\n`;
     process.stderr.write(line);
@@ -76,25 +87,36 @@ export function middleware(options = {}) {
    */
   async function reconnectAfterReload() {
     const deadline = Date.now() + connectionTimeout;
+    let attempts = 0;
     while (Date.now() < deadline) {
       try {
+        attempts++;
         const targets = await CDP.List({ port: remoteDebuggingPort });
         const pageTarget = targets.find((t) => t.type === "page");
-        if (!pageTarget) throw new Error("no page target yet");
+        if (!pageTarget) {
+          if (attempts === 1 || attempts % 20 === 0) {
+            logInfo("reconnectAfterReload", `attempt ${attempts}: no page target in list of ${targets.length} targets (types: ${targets.map((t) => t.type).join(",")})`);
+          }
+          throw new Error("no page target yet");
+        }
 
+        logInfo("reconnectAfterReload", `attempt ${attempts}: found page target ${pageTarget.id}, connecting…`);
         const newClient = await CDP({ port: remoteDebuggingPort, target: pageTarget.id });
         newClient.on("disconnect", () => {
+          logInfo("reconnectAfterReload", "new client disconnected");
           cdpClient = null;
         });
         await newClient.Profiler.enable();
         cdpClient = newClient;
+        logInfo("reconnectAfterReload", `reconnected successfully after ${attempts} attempt(s)`);
         return;
-      } catch {
+      } catch (err) {
+        if (attempts === 1) logError("reconnectAfterReload attempt 1", err);
         await new Promise((r) => setTimeout(r, 50));
       }
     }
     console.warn("[coverage] Could not reconnect to Chrome after reload — coverage disabled.");
-    logError("reconnectAfterReload", new Error("Timed out waiting for page target after reload"));
+    logError("reconnectAfterReload", new Error(`Timed out after ${attempts} attempts`));
   }
 
   /**
@@ -170,6 +192,7 @@ export function middleware(options = {}) {
 
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
+      logInfo("/_coverage", `request received, cdpClient=${cdpClient ? "connected" : "null"}, coverageStarted=${coverageStarted}`);
       // The page-target WebSocket may close at the same moment /_coverage is
       // called (disconnect and request arrive within 1 ms of each other on
       // Linux headless Chrome). Handle both cases with a single retry loop:
@@ -188,6 +211,7 @@ export function middleware(options = {}) {
 
         try {
           const { result } = await cdpClient.Profiler.takePreciseCoverage();
+          logInfo("/_coverage", `takePreciseCoverage succeeded: ${result.length} scripts`);
           coverageResult = result;
           break;
         } catch (err) {
@@ -201,7 +225,7 @@ export function middleware(options = {}) {
       }
 
       if (!coverageResult) {
-        const msg = "Could not collect coverage — CDP connection lost";
+        const msg = `Could not collect coverage after ${Math.round((Date.now() - (deadline - 10_000)) / 1000)}s — CDP connection lost`;
         logError("/_coverage", new Error(msg));
         res.status(503).json({ error: msg });
         return;
