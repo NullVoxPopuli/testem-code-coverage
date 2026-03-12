@@ -49,6 +49,18 @@ export function middleware(options = {}) {
 
   const outputPath = isAbsolute(outputFolder) ? outputFolder : join(cwd, outputFolder);
   const outputFile = join(outputPath, "coverage-data.json");
+  const errorLog = join(outputPath, "errors.log");
+
+  function logError(label, err) {
+    const line = `[${new Date().toISOString()}] ${label}: ${err?.stack ?? err?.message ?? String(err)}\n`;
+    process.stderr.write(line);
+    try {
+      fs.mkdirSync(outputPath, { recursive: true });
+      fs.appendFileSync(errorLog, line);
+    } catch {
+      // If we can't write the log file, stderr above is the fallback.
+    }
+  }
 
   // Set to true once startPreciseCoverage has been called. Used by the
   // disconnect handler to know whether to attempt a post-reload reconnect.
@@ -82,6 +94,7 @@ export function middleware(options = {}) {
       }
     }
     console.warn("[coverage] Could not reconnect to Chrome after reload — coverage disabled.");
+    logError("reconnectAfterReload", new Error("Timed out waiting for page target after reload"));
   }
 
   /**
@@ -96,7 +109,9 @@ export function middleware(options = {}) {
     }
 
     if (lastAttempt - connectStart >= connectionTimeout) {
-      console.warn("[coverage] Could not connect to Chrome CDP after 30 s — coverage disabled.");
+      const msg = "Could not connect to Chrome CDP after 30 s — coverage disabled.";
+      console.warn(`[coverage] ${msg}`);
+      logError("connectChromeDevTools", new Error(msg));
       return;
     }
 
@@ -119,6 +134,7 @@ export function middleware(options = {}) {
           // V8 precise coverage is an isolate-level setting and persists across
           // same-origin navigations, so takePreciseCoverage() on the new
           // connection still returns data collected since startPreciseCoverage().
+          logError("disconnect", new Error("Page target WebSocket closed after reload — starting reconnectAfterReload()"));
           void reconnectAfterReload();
         }
       });
@@ -137,13 +153,15 @@ export function middleware(options = {}) {
 
       cdpClient = client;
       return;
-    } catch {
+    } catch (err) {
       // If coverage was already started, the disconnect handler fired and
       // reconnectAfterReload() is already taking care of reconnecting.
       // Do NOT retry connectChromeDevTools() here — that would call
       // startPreciseCoverage() + Page.reload() again, wiping coverage data.
       if (!coverageStarted) {
         setTimeout(() => connectChromeDevTools(), CHECK_INTERVAL);
+      } else {
+        logError("connectChromeDevTools (post-reload throw)", err);
       }
     }
   }
@@ -152,8 +170,20 @@ export function middleware(options = {}) {
 
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
+      // If cdpClient is temporarily null (e.g. during a post-reload reconnect on
+      // Linux headless Chrome), wait up to 10 s for reconnectAfterReload() to
+      // restore it rather than immediately returning 503.
       if (!cdpClient) {
-        res.status(503).json({ error: "Chrome DevTools not connected" });
+        const deadline = Date.now() + 10_000;
+        while (!cdpClient && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      }
+
+      if (!cdpClient) {
+        const msg = "Chrome DevTools not connected after 10 s wait";
+        logError("/_coverage", new Error(msg));
+        res.status(503).json({ error: msg });
         return;
       }
 
@@ -174,6 +204,7 @@ export function middleware(options = {}) {
 
         res.json({ ok: true, scripts: result.length });
       } catch (err) {
+        logError("/_coverage handler", err);
         console.error("\n[coverage] Error generating report:", err.stack || err.message);
         res.status(500).json({ error: err.message });
       }

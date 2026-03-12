@@ -33,3 +33,13 @@ jobs:
           cache: pnpm
       - run: pnpm install
       - run: pnpm test
+      - name: Show coverage error log (on failure)
+        if: failure()
+        run: |
+          LOG=test-scenarios/vite-app-js/coverage/errors.log
+          if [ -f "$LOG" ]; then
+            echo "=== $LOG ==="
+            cat "$LOG"
+          else
+            echo "(no errors.log found — coverage directory was never created)"
+          fi
