@@ -116,6 +116,9 @@ export function middleware(options = {}) {
   let reloadPending = false;
   let newCoverageResolve = null;
   let newCoveragePromise = null;
+  // Browser context created for the isolated coverage tab (separate renderer,
+  // fresh V8 compilation cache). Disposed after coverage is collected.
+  let coverageBrowserContextId = null;
 
   const outputPath = isAbsolute(outputFolder) ? outputFolder : join(cwd, outputFolder);
   const outputFile = join(outputPath, "coverage-data.json");
@@ -329,6 +332,26 @@ export function middleware(options = {}) {
             coverageCache = null;
             cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
 
+            // Chrome caches pre-compiled V8 bytecode alongside HTTP responses.
+            // If the scripts were previously compiled WITHOUT precise coverage
+            // active (on the old tab), the cached bytecode lacks coverage hooks.
+            // V8 would use the cached bytecode directly, making startPreciseCoverage
+            // ineffective for those functions (they appear absent from the V8
+            // coverage output — false "uncovered" result).
+            //
+            // Fix: disable the HTTP cache for this session BEFORE resuming, so
+            // Chrome downloads scripts fresh and V8 must compile them from source
+            // WITH precise coverage instrumentation active.
+            try {
+              await session.Network.enable();
+              await session.Network.setCacheDisabled({ cacheDisabled: true });
+              logInfo("attachedToTarget", `HTTP cache disabled for session ${sessionId}`);
+            } catch (cacheErr) {
+              // Non-fatal: if Network domain isn't available, coverage may still
+              // work if the bytecode cache happens to be cold.
+              logError("attachedToTarget setCacheDisabled", cacheErr);
+            }
+
             await session.Runtime.runIfWaitingForDebugger();
             // Clear the pending flag so the next /_coverage request (from the
             // new page's Testem.afterTests) is processed normally.
@@ -372,13 +395,24 @@ export function middleware(options = {}) {
             // premature SIGTERM before the new tab's coverage is collected).
             session.Page.navigate({ url: "about:blank" }).catch(() => {});
 
-            // Open a fresh tab at the test URL. With waitForDebuggerOnStart=true
-            // the new tab pauses before any JS, giving us the
-            // waitingForDebugger=true path above for correct coverage.
+            // Open a fresh tab at the test URL in an ISOLATED browser context
+            // so it gets its own renderer process with a clean V8 compilation
+            // cache. Without isolation, Chrome reuses compiled bytecode from the
+            // old tab's renderer — scripts that were compiled WITHOUT precise
+            // coverage active — causing functions like `get label` and
+            // `increment` (compiled+called on the old tab) to be invisible to
+            // V8 coverage on the new tab even though they ARE called by tests.
+            // With waitForDebuggerOnStart=true the new tab pauses before any JS,
+            // giving us the waitingForDebugger=true path above for correct coverage.
             // Save the targetId so we can ignore spurious attachedToTarget events
             // from the old tab's about:blank renderer (Linux creates a new
             // renderer process on cross-origin navigation).
-            const { targetId } = await browser.Target.createTarget({ url: testUrl });
+            const { browserContextId } = await browser.Target.createBrowserContext();
+            coverageBrowserContextId = browserContextId;
+            const { targetId } = await browser.Target.createTarget({
+              url: testUrl,
+              browserContextId,
+            });
             coverageTabTargetId = targetId;
             logInfo("attachedToTarget", `new coverage tab opened for ${testUrl}`);
           }
@@ -541,6 +575,19 @@ export function middleware(options = {}) {
         });
 
         await handleReport?.(coverageResult);
+
+        // Clean up the isolated browser context created for this coverage run.
+        // Do this AFTER the report so Chrome doesn't GC the tab mid-report.
+        if (coverageBrowserContextId) {
+          try {
+            await browser.Target.disposeBrowserContext({
+              browserContextId: coverageBrowserContextId,
+            });
+          } catch (_) {
+            // ignore — Chrome may have already cleaned it up
+          }
+          coverageBrowserContextId = null;
+        }
 
         res.json({ ok: true, scripts: coverageResult.length });
       } catch (err) {
