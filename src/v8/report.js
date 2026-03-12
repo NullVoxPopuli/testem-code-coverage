@@ -122,11 +122,11 @@ function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {
           origSource = orig.source;
           isLocal = isLocalSource(orig.source);
         }
-        diag(
-          `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) not in V8 — local=${isLocal} source=${origSource}`,
-        );
-
+        // Only log local-source methods to keep diagnostics concise.
         if (isLocal) {
+          diag(
+            `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) NOT in V8 — local=true source=${origSource}`,
+          );
           synthetic.push({
             functionName: methodLabel,
             // Use the full MethodDefinition range so the synthetic entry spans the
@@ -136,14 +136,23 @@ function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {
           });
         }
       } else {
-        // Method IS in V8 — log its count for diagnostic purposes.
+        // Method IS in V8 — find and log its count to help debug cross-platform differences.
         const v8fn = v8Functions.find(
           (f) => f.ranges[0]?.startOffset === node.start || f.ranges[0]?.startOffset === keyStart,
         );
         if (v8fn) {
-          diag(
-            `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) in V8 count=${v8fn.ranges[0]?.count} name="${v8fn.functionName}"`,
-          );
+          // Determine if this is a local source (to keep log concise).
+          let origSource = null;
+          if (tracer) {
+            const { line, column } = offsetToLineCol(node.start);
+            const orig = originalPositionFor(tracer, { line, column });
+            origSource = orig.source;
+          }
+          if (isLocalSource(origSource)) {
+            diag(
+              `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) in V8 count=${v8fn.ranges[0]?.count} name="${v8fn.functionName}"`,
+            );
+          }
         }
       }
     }
