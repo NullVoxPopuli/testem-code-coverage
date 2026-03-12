@@ -138,7 +138,13 @@ export function middleware(options = {}) {
       cdpClient = client;
       return;
     } catch {
-      setTimeout(() => connectChromeDevTools(), CHECK_INTERVAL);
+      // If coverage was already started, the disconnect handler fired and
+      // reconnectAfterReload() is already taking care of reconnecting.
+      // Do NOT retry connectChromeDevTools() here — that would call
+      // startPreciseCoverage() + Page.reload() again, wiping coverage data.
+      if (!coverageStarted) {
+        setTimeout(() => connectChromeDevTools(), CHECK_INTERVAL);
+      }
     }
   }
 
