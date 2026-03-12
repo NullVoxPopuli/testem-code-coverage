@@ -170,39 +170,57 @@ export function middleware(options = {}) {
 
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
-      // If cdpClient is temporarily null (e.g. during a post-reload reconnect on
-      // Linux headless Chrome), wait up to 10 s for reconnectAfterReload() to
-      // restore it rather than immediately returning 503.
-      if (!cdpClient) {
-        const deadline = Date.now() + 10_000;
+      // The page-target WebSocket may close at the same moment /_coverage is
+      // called (disconnect and request arrive within 1 ms of each other on
+      // Linux headless Chrome). Handle both cases with a single retry loop:
+      //   • cdpClient is null  → wait for reconnectAfterReload() to restore it
+      //   • cdpClient is set but WebSocket just died → takePreciseCoverage()
+      //     throws; cdpClient will be null after the disconnect handler runs,
+      //     so loop around and wait for reconnect
+      let coverageResult;
+      const deadline = Date.now() + 10_000;
+
+      while (Date.now() < deadline) {
         while (!cdpClient && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        if (!cdpClient) break;
+
+        try {
+          const { result } = await cdpClient.Profiler.takePreciseCoverage();
+          coverageResult = result;
+          break;
+        } catch (err) {
+          logError("takePreciseCoverage (will retry after reconnect)", err);
+          // The WebSocket likely closed simultaneously. The disconnect handler
+          // will null out cdpClient and start reconnectAfterReload(); give it
+          // a moment then loop back to the wait above.
+          cdpClient = null;
           await new Promise((r) => setTimeout(r, 50));
         }
       }
 
-      if (!cdpClient) {
-        const msg = "Chrome DevTools not connected after 10 s wait";
+      if (!coverageResult) {
+        const msg = "Could not collect coverage — CDP connection lost";
         logError("/_coverage", new Error(msg));
         res.status(503).json({ error: msg });
         return;
       }
 
       try {
-        const { result } = await cdpClient.Profiler.takePreciseCoverage();
-
         fs.mkdirSync(outputPath, { recursive: true });
-        fs.writeFileSync(outputFile, JSON.stringify(result));
+        fs.writeFileSync(outputFile, JSON.stringify(coverageResult));
         // Generate the report before responding. The browser's QUnit.done() async
         // hook is still awaiting this response, so Chrome stays alive until we're
         // done printing. Output goes to process.stdout of the testem process and
         // appears directly in the terminal.
-        await generateReport(result, {
+        await generateReport(coverageResult, {
           coverageDir: outputPath,
         });
 
-        await handleReport?.(result);
+        await handleReport?.(coverageResult);
 
-        res.json({ ok: true, scripts: result.length });
+        res.json({ ok: true, scripts: coverageResult.length });
       } catch (err) {
         logError("/_coverage handler", err);
         console.error("\n[coverage] Error generating report:", err.stack || err.message);
