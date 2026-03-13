@@ -284,6 +284,13 @@ export function middleware(options = {}) {
       // Track whether we've already reloaded so we don't reload on subsequent
       // attachedToTarget events (e.g. if setAutoAttach auto-attaches multiple times).
       let reloadSent = false;
+      // The targetId of the fresh coverage tab we open via createTarget.
+      // Set when createTarget resolves so we can reject spurious
+      // attachedToTarget events from the old tab's about:blank renderer on Linux
+      // (cross-origin navigate there creates a new renderer → fires attachedToTarget
+      // for the OLD target with a new session — targetId unmistakable since it's the
+      // same old-tab target, different from the new tab).
+      let coverageTabTargetId = null;
 
       // 2. Auto-attach with flatten:true — required for browser-level auto-attach.
       //    This fires attachedToTarget for ALL existing page targets immediately,
@@ -301,25 +308,28 @@ export function middleware(options = {}) {
           logInfo("attachedToTarget", `coverage started on session ${sessionId}`);
 
           if (waitingForDebugger) {
-            // On Linux, Page.reload({ ignoreCache: true }) sometimes triggers a
-            // renderer process change for the same target (cross-origin / OOPIF
-            // behavior), firing a new attachedToTarget(waitingForDebugger=true)
-            // for the same target with a new session ID.
+            // A new page was created via createTarget and paused before any JS
+            // runs (waitForDebuggerOnStart: true). This is the dedicated coverage
+            // tab — resume it once coverage is fully set up.
             //
-            // In this case we need to adopt the new session (update cdpClient)
-            // and resume the paused renderer so the test page can load.
-            if (!reloadSent) {
-              // Unexpected: a new paused target fired before we initiated a
-              // reload. Just resume it so Chrome doesn't hang.
+            // Guard: on Linux, navigating the old tab to about:blank sometimes
+            // spawns a NEW RENDERER for the OLD target, which also fires
+            // attachedToTarget(waitingForDebugger=true). Reject that by checking
+            // the targetId — we set coverageTabTargetId from createTarget's return
+            // value just after this event fires (because Chrome fires the event
+            // before the CDP createTarget response returns, coverageTabTargetId
+            // is set 1-3ms after the event). The check therefore runs safely
+            // after two async calls (Profiler.enable + startPreciseCoverage) by
+            // which time coverageTabTargetId is definitely set.
+            if (coverageTabTargetId && targetInfo.targetId !== coverageTabTargetId) {
               logInfo(
                 "attachedToTarget",
-                `unexpected waitingForDebugger=true before reload — resuming without adopting`,
+                `ignoring spurious waitingForDebugger tab (target ${targetInfo.targetId}, expected ${coverageTabTargetId})`,
               );
               await session.Runtime.runIfWaitingForDebugger();
               return;
             }
 
-            // Adopt the new renderer session as cdpClient.
             cdpClient = session;
 
             // Start proactive caching for the race-condition fallback.
@@ -327,20 +337,31 @@ export function middleware(options = {}) {
             coverageCache = null;
             cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
 
-            // Extra safety: disable HTTP cache on this new renderer so Chrome
-            // doesn't serve pre-compiled V8 bytecode for scripts that the old
-            // renderer already loaded. The original reload was sent with
-            // ignoreCache: true, but setCacheDisabled covers any sub-resources
-            // or redirects that might still hit the cache.
+            // Clear the in-memory V8 compilation cache before the new tab loads
+            // any scripts. The old tab (which ran tests WITHOUT coverage before we
+            // connected) may have left compiled function objects in V8's
+            // CompilationCache (shared across contexts in the same renderer
+            // process). If V8 uses these cached compiled functions when the new
+            // tab loads the same scripts, precise coverage hooks won't be applied
+            // to them — causing covered functions to appear absent from the V8
+            // coverage output.
+            //
+            // Page.clearCompilationCache() calls v8::Isolate::ClearCachesForTesting()
+            // which purges the in-memory compiled-code cache. Combined with
+            // startPreciseCoverage being active, all functions that compile
+            // after this call will be correctly instrumented.
             try {
-              await session.Network.enable();
-              await session.Network.setCacheDisabled({ cacheDisabled: true });
-              logInfo("attachedToTarget", `HTTP cache disabled for new renderer ${sessionId}`);
+              await session.Page.enable();
+              await session.Page.clearCompilationCache();
+              logInfo("attachedToTarget", `V8 compilation cache cleared for session ${sessionId}`);
             } catch (cacheErr) {
-              logError("attachedToTarget setCacheDisabled", cacheErr);
+              // Non-fatal — experimental API may be absent in some Chrome builds.
+              logError("attachedToTarget clearCompilationCache", cacheErr);
             }
 
             await session.Runtime.runIfWaitingForDebugger();
+            // Clear the pending flag so the next /_coverage request (from the
+            // new page's Testem.afterTests) is processed normally.
             reloadPending = false;
             logInfo("attachedToTarget", `session ${sessionId} resumed — coverage ready`);
           } else if (!reloadSent) {
@@ -352,19 +373,16 @@ export function middleware(options = {}) {
             cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
 
             // Existing renderer (page already loaded, waitingForDebugger=false).
+            // V8 compiled all scripts WITHOUT precise coverage before we connected.
+            // Chrome's HTTP cache also stored pre-compiled bytecode alongside the
+            // HTTP responses — so a simple reload would still skip recompilation.
             //
-            // Problem: Chrome caches pre-compiled V8 bytecode alongside HTTP
-            // responses in its disk cache. The scripts that the test page loaded
-            // BEFORE we connected to Chrome were compiled without precise coverage
-            // instrumentation. When we call startPreciseCoverage now, those
-            // already-compiled functions won't have call-count hooks — they appear
-            // absent from V8 coverage output, producing false 100% coverage for
-            // never-called class methods.
-            //
-            // Fix: reload the page with ignoreCache: true. Chrome re-downloads
-            // every script from the dev server (bypassing the bytecode cache),
-            // and V8 compiles them from source with precise coverage already
-            // active — giving correct instrumentation for every function.
+            // Fix: navigate the current tab to about:blank (drops its Testem
+            // socket.io connection, aborting the stale /_coverage fetch with
+            // AbortError so next() is NOT called prematurely), then open a FRESH
+            // tab via createTarget. The new tab pauses with waitingForDebugger=true
+            // before any JS runs, letting us clear the V8 compilation cache and
+            // call startPreciseCoverage before any modules compile.
             reloadSent = true;
             // Set reloadPending and create the coordination promise BEFORE any
             // await, so /_coverage handlers that arrive during Page.enable()
@@ -373,13 +391,26 @@ export function middleware(options = {}) {
             newCoveragePromise = new Promise((resolve) => {
               newCoverageResolve = resolve;
             });
+            const testUrl = targetInfo.url;
             await session.Page.enable();
-            await session.Page.reload({ ignoreCache: true });
-            logInfo("attachedToTarget", `page reloaded (ignoreCache) for coverage`);
+
+            // Navigate the current tab away so its Testem.afterTests fetch
+            // gets AbortError (the adapter then skips calling next(), preventing
+            // premature SIGTERM before the new tab's coverage is collected).
+            session.Page.navigate({ url: "about:blank" }).catch(() => {});
+
+            // Open a fresh tab. With waitForDebuggerOnStart=true the new tab
+            // pauses before any JS, giving us the waitingForDebugger=true path
+            // above for correct coverage setup (cache clear + resume).
+            // Save coverageTabTargetId to reject spurious attachedToTarget events
+            // from the old tab's about:blank renderer (Linux-specific).
+            const { targetId } = await browser.Target.createTarget({ url: testUrl });
+            coverageTabTargetId = targetId;
+            logInfo("attachedToTarget", `new coverage tab opened for ${testUrl} (target ${targetId})`);
           }
-          // else: reloadSent=true, waitingForDebugger=false → ignore (this can
-          // happen if setAutoAttach re-fires for an already-handled session, e.g.
-          // after a same-renderer reload completes on macOS).
+          // else: reloadSent=true, waitingForDebugger=false → ignore (could be
+          // a second auto-attach event for an already-handled session, or the
+          // old tab reconnecting after navigate to about:blank).
         } catch (err) {
           logError("attachedToTarget handler", err);
         }
