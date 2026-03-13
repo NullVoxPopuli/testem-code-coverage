@@ -10,16 +10,9 @@ const scenarios = readdirSync(scenariosRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
 
-// Whether to run exact-number snapshot tests. Vite/Embroider builds produce
-// different chunk layouts on macOS (arm64) vs Linux (x86_64), so function
-// totals vary. Snapshots are generated on Linux CI; macOS devs rely on the
-// invariant tests below instead.
-const isLinux = process.platform === "linux";
-
 for (const name of scenarios) {
   describe(name, () => {
     const scenarioDir = join(scenariosRoot, name);
-    const snapshotDir = join(snapshotsRoot, name);
 
     // Run the scenario once; subsequent tests in this describe block reuse
     // the coverage output without re-running.
