@@ -406,7 +406,10 @@ export function middleware(options = {}) {
             // from the old tab's about:blank renderer (Linux-specific).
             const { targetId } = await browser.Target.createTarget({ url: testUrl });
             coverageTabTargetId = targetId;
-            logInfo("attachedToTarget", `new coverage tab opened for ${testUrl} (target ${targetId})`);
+            logInfo(
+              "attachedToTarget",
+              `new coverage tab opened for ${testUrl} (target ${targetId})`,
+            );
           }
           // else: reloadSent=true, waitingForDebugger=false → ignore (could be
           // a second auto-attach event for an already-handled session, or the
