@@ -204,10 +204,17 @@ export function middleware(options = {}) {
         enable: () => browser.send("Page.enable", {}, sessionId),
         navigate: (params) => browser.send("Page.navigate", params, sessionId),
         reload: () => browser.send("Page.reload", { ignoreCache: true }, sessionId),
+        clearCompilationCache: () =>
+          browser.send("Page.clearCompilationCache", {}, sessionId),
         addScriptToEvaluateOnNewDocument: (params) =>
           browser.send("Page.addScriptToEvaluateOnNewDocument", params, sessionId),
         removeScriptToEvaluateOnNewDocument: (params) =>
           browser.send("Page.removeScriptToEvaluateOnNewDocument", params, sessionId),
+      },
+      Network: {
+        enable: () => browser.send("Network.enable", {}, sessionId),
+        setCacheDisabled: (params) =>
+          browser.send("Network.setCacheDisabled", params, sessionId),
       },
       Runtime: {
         enable: () => browser.send("Runtime.enable", {}, sessionId),
@@ -337,25 +344,34 @@ export function middleware(options = {}) {
             coverageCache = null;
             cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
 
-            // Clear the in-memory V8 compilation cache before the new tab loads
-            // any scripts. The old tab (which ran tests WITHOUT coverage before we
-            // connected) may have left compiled function objects in V8's
-            // CompilationCache (shared across contexts in the same renderer
-            // process). If V8 uses these cached compiled functions when the new
-            // tab loads the same scripts, precise coverage hooks won't be applied
-            // to them — causing covered functions to appear absent from the V8
-            // coverage output.
+            // Clear both HTTP cache and in-memory V8 compilation cache before
+            // the new tab loads any scripts, to ensure V8 compiles all scripts
+            // fresh with precise coverage instrumentation active.
             //
-            // Page.clearCompilationCache() calls v8::Isolate::ClearCachesForTesting()
-            // which purges the in-memory compiled-code cache. Combined with
-            // startPreciseCoverage being active, all functions that compile
-            // after this call will be correctly instrumented.
+            // Two layers:
+            //   1. Network.setCacheDisabled — prevents Chrome from serving HTTP
+            //      responses (including embedded pre-compiled V8 bytecode) from
+            //      its disk cache. Forces a fresh download from the dev server.
+            //   2. Page.clearCompilationCache — purges V8's in-memory compiled-
+            //      code cache (shared across contexts in the same renderer).
+            //      This covers the case where the old tab left compiled function
+            //      objects in V8's CompilationCache even after HTTP cache is gone.
+            //
+            // Both are attempted; errors are non-fatal (older Chrome may lack
+            // clearCompilationCache, and Network.enable may fail in some configs).
+            try {
+              await session.Network.enable();
+              await session.Network.setCacheDisabled({ cacheDisabled: true });
+              logInfo("attachedToTarget", `HTTP cache disabled for session ${sessionId}`);
+            } catch (netErr) {
+              logError("attachedToTarget setCacheDisabled", netErr);
+            }
             try {
               await session.Page.enable();
               await session.Page.clearCompilationCache();
               logInfo("attachedToTarget", `V8 compilation cache cleared for session ${sessionId}`);
             } catch (cacheErr) {
-              // Non-fatal — experimental API may be absent in some Chrome builds.
+              // Non-fatal — experimental API, log and continue.
               logError("attachedToTarget clearCompilationCache", cacheErr);
             }
 
@@ -398,6 +414,18 @@ export function middleware(options = {}) {
             // gets AbortError (the adapter then skips calling next(), preventing
             // premature SIGTERM before the new tab's coverage is collected).
             session.Page.navigate({ url: "about:blank" }).catch(() => {});
+
+            // Clear Chrome's HTTP disk cache (which stores pre-compiled V8
+            // bytecode alongside cached script responses). Without this, Chrome
+            // serves the bytecode-embedded HTTP response to the new tab → V8
+            // skips recompilation → precision coverage hooks are never applied.
+            try {
+              await browser.send("Network.enable");
+              await browser.send("Network.clearBrowserCache");
+              logInfo("attachedToTarget", `browser HTTP cache cleared`);
+            } catch (clearErr) {
+              logError("attachedToTarget clearBrowserCache", clearErr);
+            }
 
             // Open a fresh tab. With waitForDebuggerOnStart=true the new tab
             // pauses before any JS, giving us the waitingForDebugger=true path
