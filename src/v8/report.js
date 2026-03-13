@@ -41,6 +41,9 @@ function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {
   // 'increment()'), which matches acorn's MethodDefinition.start.
   const knownStarts = new Set(v8Functions.map((f) => f.ranges[0]?.startOffset));
 
+  // Diagnostic: collect local method ranges for post-walk nearby-V8-function logging.
+  const localMethodRanges = [];
+
   let ast;
   try {
     ast = acornParse(source, { ecmaVersion: "latest", sourceType: "module" });
@@ -127,6 +130,7 @@ function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {
           diag(
             `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) NOT in V8 — local=true source=${origSource}`,
           );
+          localMethodRanges.push({ label: methodLabel, start: node.start, end: node.end });
           synthetic.push({
             functionName: methodLabel,
             // Use the full MethodDefinition range so the synthetic entry spans the
@@ -172,6 +176,28 @@ function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {
   }
 
   walk(ast);
+
+  // For each local method that was NOT found in V8, log the nearest V8 functions
+  // within ±500 bytes of the expected offset. This helps identify cases where V8
+  // reports the function at a slightly different startOffset than acorn's AST.
+  if (localMethodRanges.length > 0) {
+    for (const { label, start } of localMethodRanges) {
+      const nearby = v8Functions
+        .filter((f) => {
+          const s = f.ranges[0]?.startOffset ?? -1;
+          return s >= start - 500 && s <= start + 500;
+        })
+        .map(
+          (f) => `  @${f.ranges[0]?.startOffset} count=${f.ranges[0]?.count} "${f.functionName}"`,
+        );
+      if (nearby.length > 0) {
+        diag(`  V8 functions near ${label} @${start}: ${nearby.join(" | ")}`);
+      } else {
+        diag(`  V8 functions near ${label} @${start}: (none within ±500 bytes)`);
+      }
+    }
+  }
+
   return synthetic;
 }
 
