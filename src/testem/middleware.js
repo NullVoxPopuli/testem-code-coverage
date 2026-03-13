@@ -405,13 +405,16 @@ export function middleware(options = {}) {
             // premature SIGTERM before the new tab's coverage is collected).
             session.Page.navigate({ url: "about:blank" }).catch(() => {});
 
-            // Clear Chrome's HTTP disk cache so the new tab downloads scripts
-            // fresh (no pre-compiled bytecode embedded in cached responses).
-            // Note: Network.enable is NOT available at the browser endpoint —
-            // skip it and call clearBrowserCache directly.
+            // Clear Chrome's HTTP disk cache using the first tab's page session.
+            // Network.clearBrowserCache clears the ENTIRE browser's disk cache
+            // (including V8 bytecode metadata stored alongside HTTP responses).
+            // It must be called at page/session level (Network domain requires
+            // an active session); calling it at browser level fails with
+            // "'Network.clearBrowserCache' wasn't found".
             try {
-              await browser.send("Network.clearBrowserCache");
-              logInfo("attachedToTarget", `browser HTTP cache cleared`);
+              await session.Network.enable();
+              await session.Network.clearBrowserCache();
+              logInfo("attachedToTarget", `browser HTTP cache cleared via first-tab session`);
             } catch (clearErr) {
               logError("attachedToTarget clearBrowserCache", clearErr);
             }
