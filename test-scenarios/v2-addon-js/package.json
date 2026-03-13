@@ -28,6 +28,7 @@
     "src"
   ],
   "scripts": {
+    "coverage:view": "cd coverage && pnpm dlx html-pages . --no-cache",
     "build": "rollup --config",
     "format": "prettier . --cache --write",
     "lint": "concurrently \"pnpm:lint:*(!fix)\" --names \"lint:\" --prefixColors auto",
@@ -40,11 +41,14 @@
     "lint:publish": "pnpm build && publint run --level error",
     "prepack": "rollup --config",
     "start": "vite dev",
-    "test": "vite build --mode=development --out-dir dist-tests && testem --file testem.cjs ci --port 0"
+    "test:build": "vite build --mode development --out-dir dist-tests",
+    "test:run": "testem ci --port 0",
+    "test": "pnpm test:build && pnpm test:run"
   },
   "dependencies": {
     "@embroider/addon-shim": "^1.8.9",
-    "decorator-transforms": "^2.2.2"
+    "decorator-transforms": "^2.2.2",
+    "testem-code-coverage": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
