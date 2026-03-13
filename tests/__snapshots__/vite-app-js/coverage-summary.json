@@ -2,15 +2,15 @@
   "total": {
     "lines": {
       "total": 396,
-      "covered": 367,
+      "covered": 370,
       "skipped": 0,
-      "pct": 92.67
+      "pct": 93.43
     },
     "statements": {
       "total": 396,
-      "covered": 367,
+      "covered": 370,
       "skipped": 0,
-      "pct": 92.67
+      "pct": 93.43
     },
     "functions": {
       "total": 5,
@@ -322,9 +322,9 @@
   "tests/integration/components/counter-test.gjs": {
     "lines": {
       "total": 27,
-      "covered": 24,
+      "covered": 27,
       "skipped": 0,
-      "pct": 88.88
+      "pct": 100
     },
     "functions": {
       "total": 0,
@@ -334,9 +334,9 @@
     },
     "statements": {
       "total": 27,
-      "covered": 24,
+      "covered": 27,
       "skipped": 0,
-      "pct": 88.88
+      "pct": 100
     }
   },
   "tests/unit/utils/format-score-test.js": {
