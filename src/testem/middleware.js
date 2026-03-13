@@ -407,8 +407,9 @@ export function middleware(options = {}) {
 
             // Clear Chrome's HTTP disk cache so the new tab downloads scripts
             // fresh (no pre-compiled bytecode embedded in cached responses).
+            // Note: Network.enable is NOT available at the browser endpoint —
+            // skip it and call clearBrowserCache directly.
             try {
-              await browser.send("Network.enable");
               await browser.send("Network.clearBrowserCache");
               logInfo("attachedToTarget", `browser HTTP cache cleared`);
             } catch (clearErr) {
