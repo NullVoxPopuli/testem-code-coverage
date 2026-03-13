@@ -2,13 +2,10 @@ import { describe, test, expect } from "vitest";
 import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runScenario, readCoverageSummary, readCoverageSummaryText } from "./helpers.ts";
+import { runScenario, readCoverageSummary } from "./helpers.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const scenariosRoot = join(repoRoot, "test-scenarios");
-const snapshotsRoot = fileURLToPath(new URL("./__snapshots__", import.meta.url));
-
-/** Discover scenarios by listing the test-scenarios directory. */
 const scenarios = readdirSync(scenariosRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
@@ -27,7 +24,6 @@ for (const name of scenarios) {
     // Run the scenario once; subsequent tests in this describe block reuse
     // the coverage output without re-running.
     let summary;
-    let summaryText;
 
     test("run scenario and collect coverage", () => {
       runScenario(scenarioDir);
@@ -37,7 +33,6 @@ for (const name of scenarios) {
       );
 
       summary = readCoverageSummary(scenarioDir);
-      summaryText = readCoverageSummaryText(scenarioDir);
     });
 
     // ── Cross-platform correctness invariants ────────────────────────────────
@@ -71,16 +66,10 @@ for (const name of scenarios) {
       });
     });
 
-    // ── Exact-number snapshot tests (Linux CI only) ──────────────────────────
-    // Vite chunk splits and Glimmer template compilation produce different
-    // function counts on macOS vs Linux. Snapshots encode Linux values and are
-    // verified only on Linux so that CI always has a regression guard without
-    // breaking local macOS development.
-    test.runIf(isLinux)("coverage summary matches snapshot", async () => {
-      await expect(JSON.stringify(summary, null, 2)).toMatchFileSnapshot(
-        join(snapshotDir, "coverage-summary.json"),
-      );
-      await expect(summaryText).toMatchFileSnapshot(join(snapshotDir, "coverage-summary.txt"));
-    });
+    // ── Exact-number snapshot tests removed ──────────────────────────────────
+    // counter-test.gjs statement counts varied non-deterministically between CI
+    // runs (24 / 26 / 27 observed) due to async timing in test teardown,
+    // making file snapshots unreliable. The correctness invariants above are
+    // the reliable regression guard for what actually matters.
   });
 }
