@@ -1,11 +1,5 @@
 /**
  * Converts a V8 precise coverage snapshot into an Istanbul coverage report.
- *
- * Usage:
- *   - As a module: import { generateReport } from './report.js';
- *                  await generateReport(v8Scripts);
- *   - Standalone:  node report.js
- *                  (reads coverage-data.json written by coverage-middleware)
  */
 
 import path from "node:path";
