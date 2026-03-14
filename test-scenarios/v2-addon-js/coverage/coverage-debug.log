@@ -1,8 +1,0 @@
-script: http://localhost:61780/assets/tests-CSq7lIyB.js — 897 V8 functions, covered: 853
-  MethodDef get label @1457952 (key@1457956) in V8 count=3 name="get label"
-  MethodDef increment @1458007 (key@1458007) in V8 count=2 name="increment"
-  MethodDef clampedCount @1458347 (key@1458347) NOT in V8 — local=true source=../../src/components/counter.gjs
-  MethodDef countAsString @1458448 (key@1458448) NOT in V8 — local=true source=../../src/components/counter.gjs
-  V8 functions near clampedCount @1458347:   @1457952 count=3 "get label" |   @1458007 count=2 "increment"
-  V8 functions near countAsString @1458448:   @1457952 count=3 "get label" |   @1458007 count=2 "increment"
-  → 2 synthetic entries added: clampedCount, countAsString
