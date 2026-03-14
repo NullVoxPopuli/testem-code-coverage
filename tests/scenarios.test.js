@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, beforeAll } from "vitest";
 import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,18 +14,19 @@ for (const name of scenarios) {
   describe(name, () => {
     const scenarioDir = join(scenariosRoot, name);
 
-    // Run the scenario once; subsequent tests in this describe block reuse
-    // the coverage output without re-running.
+    // Run the scenario once in beforeAll so all tests in this describe block
+    // can rely on coverage output being present regardless of execution order.
     let summary;
 
-    test("run scenario and collect coverage", () => {
+    beforeAll(() => {
       runScenario(scenarioDir);
+      summary = readCoverageSummary(scenarioDir);
+    });
 
+    test("coverage directory was created", () => {
       expect(existsSync(join(scenarioDir, "coverage")), "coverage directory was created").toBe(
         true,
       );
-
-      summary = readCoverageSummary(scenarioDir);
     });
 
     // ── Cross-platform correctness invariants ────────────────────────────────
