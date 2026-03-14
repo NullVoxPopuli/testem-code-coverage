@@ -71,7 +71,7 @@ import { REPORT_TO_MIDDLEWARE_PATH } from "#utils";
 const CHECK_INTERVAL = 500; // ms
 
 export function middleware(options = {}) {
-  const { outputFolder = "coverage", distDir, handleReport, chrome } = options;
+  const { outputFolder = "coverage", distDir, handleReport, include, chrome } = options;
   const { connectionTimeout = 30_000, remoteDebuggingPort = 9222 } = chrome || {};
 
   const cwd = process.cwd();
@@ -587,6 +587,7 @@ export function middleware(options = {}) {
         await generateReport(coverageResult, {
           coverageDir: outputPath,
           distDir,
+          include,
         });
 
         await handleReport?.(coverageResult);
