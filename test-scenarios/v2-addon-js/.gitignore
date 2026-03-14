@@ -18,3 +18,5 @@ node_modules/
 
 # potentially containing secrets
 *.local
+test-scenarios/v2-addon-js/coverage/
+dist-tests/

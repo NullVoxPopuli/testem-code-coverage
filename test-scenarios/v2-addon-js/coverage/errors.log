@@ -1,0 +1,141 @@
+[2026-03-13T22:14:25.986Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:14:26.489Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:22:08.550Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:22:09.061Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:22:09.519Z] INFO /_coverage: request received, cdpClient=null, reloadPending=false
+[2026-03-13T22:22:09.576Z] INFO connectChromeDevTools: browser-level connection established
+[2026-03-13T22:22:09.577Z] INFO attachedToTarget: page target D23E5452AEF9B03DA792D2A903C92129, sessionId=D7798FF84C871F1441B44CA3B22950CC, waitingForDebugger=false
+[2026-03-13T22:22:09.578Z] INFO connectChromeDevTools: setAutoAttach configured
+[2026-03-13T22:22:09.593Z] INFO attachedToTarget: coverage started on session D7798FF84C871F1441B44CA3B22950CC
+[2026-03-13T22:22:09.624Z] INFO /_coverage: stale request (detected after cdpClient wait) — holding connection
+[2026-03-13T22:22:09.638Z] attachedToTarget clearBrowserCache: TypeError: session.Network.clearBrowserCache is not a function
+    at Chrome.<anonymous> (file:///Users/psego/Development/NullVoxPopuli/ember-code-coverage/src/testem/middleware.js:416:37)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[2026-03-13T22:22:09.648Z] INFO attachedToTarget: page target 1291D21AA844984F196BD2FBBE96A9F1, sessionId=EB359ACE34CF17049DE91441D6421B5B, waitingForDebugger=true
+[2026-03-13T22:22:09.656Z] INFO attachedToTarget: new coverage tab opened for http://localhost:58817/371586127486625/tests/index.html?hidepassed (target 1291D21AA844984F196BD2FBBE96A9F1)
+[2026-03-13T22:22:09.661Z] INFO attachedToTarget: coverage started on session EB359ACE34CF17049DE91441D6421B5B
+[2026-03-13T22:22:09.663Z] INFO attachedToTarget: HTTP cache disabled for session EB359ACE34CF17049DE91441D6421B5B
+[2026-03-13T22:22:09.663Z] INFO attachedToTarget: V8 compilation cache cleared for session EB359ACE34CF17049DE91441D6421B5B
+[2026-03-13T22:22:09.663Z] INFO attachedToTarget: session EB359ACE34CF17049DE91441D6421B5B resumed — coverage ready
+[2026-03-13T22:22:09.802Z] INFO /_coverage: request received, cdpClient=connected, reloadPending=false
+[2026-03-13T22:22:09.805Z] INFO /_coverage: takePreciseCoverage succeeded: 4 scripts
+[2026-03-13T22:22:09.835Z] INFO detachedFromTarget: session EB359ACE34CF17049DE91441D6421B5B detached — cdpClient → null
+[2026-03-13T22:22:09.857Z] INFO browser: browser-level connection closed
+[2026-03-13T22:23:11.045Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:23:11.557Z] INFO connectChromeDevTools: browser-level connection established
+[2026-03-13T22:23:11.558Z] INFO attachedToTarget: page target E9B390E38BF7578F3FFB5977355C6C6E, sessionId=0B5F2AECAB31879CBAF8951495EFA02D, waitingForDebugger=false
+[2026-03-13T22:23:11.559Z] INFO connectChromeDevTools: setAutoAttach configured
+[2026-03-13T22:23:11.560Z] INFO attachedToTarget: coverage started on session 0B5F2AECAB31879CBAF8951495EFA02D
+[2026-03-13T22:23:11.609Z] attachedToTarget clearBrowserCache: TypeError: session.Network.clearBrowserCache is not a function
+    at Chrome.<anonymous> (file:///Users/psego/Development/NullVoxPopuli/ember-code-coverage/src/testem/middleware.js:416:37)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[2026-03-13T22:23:11.619Z] INFO attachedToTarget: page target AF49CEB60B0F14BAF27769B2C4818F1D, sessionId=F265C351F1DF5C9C6E7E4C0F55E0E7F2, waitingForDebugger=true
+[2026-03-13T22:23:11.623Z] INFO attachedToTarget: new coverage tab opened for http://localhost:59183/371648617371500/tests/index.html?hidepassed (target AF49CEB60B0F14BAF27769B2C4818F1D)
+[2026-03-13T22:23:11.628Z] INFO attachedToTarget: coverage started on session F265C351F1DF5C9C6E7E4C0F55E0E7F2
+[2026-03-13T22:23:11.628Z] INFO attachedToTarget: HTTP cache disabled for session F265C351F1DF5C9C6E7E4C0F55E0E7F2
+[2026-03-13T22:23:11.629Z] INFO attachedToTarget: V8 compilation cache cleared for session F265C351F1DF5C9C6E7E4C0F55E0E7F2
+[2026-03-13T22:23:11.630Z] INFO attachedToTarget: session F265C351F1DF5C9C6E7E4C0F55E0E7F2 resumed — coverage ready
+[2026-03-13T22:23:11.776Z] INFO /_coverage: request received, cdpClient=connected, reloadPending=false
+[2026-03-13T22:23:11.780Z] INFO /_coverage: takePreciseCoverage succeeded: 4 scripts
+[2026-03-13T22:23:11.810Z] INFO detachedFromTarget: session F265C351F1DF5C9C6E7E4C0F55E0E7F2 detached — cdpClient → null
+[2026-03-13T22:23:11.835Z] INFO browser: browser-level connection closed
+[2026-03-13T22:24:07.897Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:24:08.418Z] INFO connectChromeDevTools: browser-level connection established
+[2026-03-13T22:24:08.419Z] INFO attachedToTarget: page target C809FC0D0E2217EE639D5F7A58AA2206, sessionId=B690C22044BB5C1CA5931333E813F11E, waitingForDebugger=false
+[2026-03-13T22:24:08.419Z] INFO connectChromeDevTools: setAutoAttach configured
+[2026-03-13T22:24:08.425Z] INFO attachedToTarget: coverage started on session B690C22044BB5C1CA5931333E813F11E
+[2026-03-13T22:24:08.473Z] attachedToTarget clearBrowserCache: TypeError: session.Network.clearBrowserCache is not a function
+    at Chrome.<anonymous> (file:///Users/psego/Development/NullVoxPopuli/ember-code-coverage/src/testem/middleware.js:416:37)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[2026-03-13T22:24:08.487Z] INFO attachedToTarget: page target E25C59EC6CD96CB0FE97ECE1D191A7CC, sessionId=D564DF51669BB0ABE40B3F29A802443F, waitingForDebugger=true
+[2026-03-13T22:24:08.490Z] INFO attachedToTarget: new coverage tab opened for http://localhost:59505/371705473695791/tests/index.html?hidepassed (target E25C59EC6CD96CB0FE97ECE1D191A7CC)
+[2026-03-13T22:24:08.497Z] INFO attachedToTarget: coverage started on session D564DF51669BB0ABE40B3F29A802443F
+[2026-03-13T22:24:08.498Z] INFO attachedToTarget: HTTP cache disabled for session D564DF51669BB0ABE40B3F29A802443F
+[2026-03-13T22:24:08.499Z] INFO attachedToTarget: V8 compilation cache cleared for session D564DF51669BB0ABE40B3F29A802443F
+[2026-03-13T22:24:08.500Z] INFO attachedToTarget: session D564DF51669BB0ABE40B3F29A802443F resumed — coverage ready
+[2026-03-13T22:24:08.643Z] INFO /_coverage: request received, cdpClient=connected, reloadPending=false
+[2026-03-13T22:24:08.650Z] INFO /_coverage: takePreciseCoverage succeeded: 4 scripts
+[2026-03-13T22:24:08.674Z] INFO detachedFromTarget: session D564DF51669BB0ABE40B3F29A802443F detached — cdpClient → null
+[2026-03-13T22:24:08.689Z] INFO browser: browser-level connection closed
+[2026-03-13T22:25:30.438Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:25:30.952Z] INFO connectChromeDevTools: browser-level connection established
+[2026-03-13T22:25:30.953Z] INFO attachedToTarget: page target AD7224A0D9720B07D272A4FAB52DF61F, sessionId=32FAB03418F82B3E411AFDA273E03450, waitingForDebugger=false
+[2026-03-13T22:25:30.953Z] INFO connectChromeDevTools: setAutoAttach configured
+[2026-03-13T22:25:30.971Z] INFO attachedToTarget: coverage started on session 32FAB03418F82B3E411AFDA273E03450
+[2026-03-13T22:25:31.016Z] attachedToTarget clearBrowserCache: TypeError: session.Network.clearBrowserCache is not a function
+    at Chrome.<anonymous> (file:///Users/psego/Development/NullVoxPopuli/ember-code-coverage/src/testem/middleware.js:416:37)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[2026-03-13T22:25:31.027Z] INFO attachedToTarget: page target C592C2119C1FD089E0068E0821A55D23, sessionId=AEAABCF177E4D423212C69D11E24A74A, waitingForDebugger=true
+[2026-03-13T22:25:31.029Z] INFO attachedToTarget: new coverage tab opened for http://localhost:59994/37178812080458/tests/index.html?hidepassed (target C592C2119C1FD089E0068E0821A55D23)
+[2026-03-13T22:25:31.040Z] INFO attachedToTarget: coverage started on session AEAABCF177E4D423212C69D11E24A74A
+[2026-03-13T22:25:31.040Z] INFO attachedToTarget: HTTP cache disabled for session AEAABCF177E4D423212C69D11E24A74A
+[2026-03-13T22:25:31.041Z] INFO attachedToTarget: V8 compilation cache cleared for session AEAABCF177E4D423212C69D11E24A74A
+[2026-03-13T22:25:31.041Z] INFO attachedToTarget: session AEAABCF177E4D423212C69D11E24A74A resumed — coverage ready
+[2026-03-13T22:25:31.179Z] INFO /_coverage: request received, cdpClient=connected, reloadPending=false
+[2026-03-13T22:25:31.182Z] INFO /_coverage: takePreciseCoverage succeeded: 4 scripts
+[2026-03-13T22:25:31.212Z] INFO detachedFromTarget: session AEAABCF177E4D423212C69D11E24A74A detached — cdpClient → null
+[2026-03-13T22:25:31.224Z] INFO browser: browser-level connection closed
+[2026-03-13T22:26:08.622Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:26:09.137Z] INFO connectChromeDevTools: browser-level connection established
+[2026-03-13T22:26:09.138Z] INFO attachedToTarget: page target 8AAB71DBBBB23807DC6050F9535FA8AF, sessionId=29424755B74C750DADA141279465E27B, waitingForDebugger=false
+[2026-03-13T22:26:09.138Z] INFO connectChromeDevTools: setAutoAttach configured
+[2026-03-13T22:26:09.167Z] INFO attachedToTarget: coverage started on session 29424755B74C750DADA141279465E27B
+[2026-03-13T22:26:09.215Z] attachedToTarget clearBrowserCache: TypeError: session.Network.clearBrowserCache is not a function
+    at Chrome.<anonymous> (file:///Users/psego/Development/NullVoxPopuli/ember-code-coverage/src/testem/middleware.js:416:37)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[2026-03-13T22:26:09.225Z] INFO attachedToTarget: page target 872B6D6E7C5480A0FCBA699FE016A346, sessionId=8FAFFED1E8436904746987E727874B43, waitingForDebugger=true
+[2026-03-13T22:26:09.227Z] INFO attachedToTarget: new coverage tab opened for http://localhost:60219/371826192121666/tests/index.html?hidepassed (target 872B6D6E7C5480A0FCBA699FE016A346)
+[2026-03-13T22:26:09.235Z] INFO attachedToTarget: coverage started on session 8FAFFED1E8436904746987E727874B43
+[2026-03-13T22:26:09.236Z] INFO attachedToTarget: HTTP cache disabled for session 8FAFFED1E8436904746987E727874B43
+[2026-03-13T22:26:09.237Z] INFO attachedToTarget: V8 compilation cache cleared for session 8FAFFED1E8436904746987E727874B43
+[2026-03-13T22:26:09.237Z] INFO attachedToTarget: session 8FAFFED1E8436904746987E727874B43 resumed — coverage ready
+[2026-03-13T22:26:09.375Z] INFO /_coverage: request received, cdpClient=connected, reloadPending=false
+[2026-03-13T22:26:09.379Z] INFO /_coverage: takePreciseCoverage succeeded: 4 scripts
+[2026-03-13T22:26:09.588Z] INFO detachedFromTarget: session 8FAFFED1E8436904746987E727874B43 detached — cdpClient → null
+[2026-03-13T22:26:09.607Z] INFO browser: browser-level connection closed
+[2026-03-13T22:28:23.002Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:28:23.516Z] INFO connectChromeDevTools: browser-level connection established
+[2026-03-13T22:28:23.517Z] INFO attachedToTarget: page target D88E3AA2EB3DF1D958A356794513CBAC, sessionId=7466F043595F595791F9376733C38A7D, waitingForDebugger=false
+[2026-03-13T22:28:23.518Z] INFO connectChromeDevTools: setAutoAttach configured
+[2026-03-13T22:28:23.541Z] INFO attachedToTarget: coverage started on session 7466F043595F595791F9376733C38A7D
+[2026-03-13T22:28:23.586Z] attachedToTarget clearBrowserCache: TypeError: session.Network.clearBrowserCache is not a function
+    at Chrome.<anonymous> (file:///Users/psego/Development/NullVoxPopuli/ember-code-coverage/src/testem/middleware.js:416:37)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[2026-03-13T22:28:23.596Z] INFO attachedToTarget: page target C59C68D263F3C173FE2DDA4BE80B4756, sessionId=9511FAF177A59E0CF7E7C77B71D7B898, waitingForDebugger=true
+[2026-03-13T22:28:23.598Z] INFO attachedToTarget: new coverage tab opened for http://localhost:61059/371960580504208/tests/index.html?hidepassed (target C59C68D263F3C173FE2DDA4BE80B4756)
+[2026-03-13T22:28:23.604Z] INFO attachedToTarget: coverage started on session 9511FAF177A59E0CF7E7C77B71D7B898
+[2026-03-13T22:28:23.609Z] INFO attachedToTarget: HTTP cache disabled for session 9511FAF177A59E0CF7E7C77B71D7B898
+[2026-03-13T22:28:23.610Z] INFO attachedToTarget: V8 compilation cache cleared for session 9511FAF177A59E0CF7E7C77B71D7B898
+[2026-03-13T22:28:23.611Z] INFO attachedToTarget: session 9511FAF177A59E0CF7E7C77B71D7B898 resumed — coverage ready
+[2026-03-13T22:28:23.744Z] INFO /_coverage: request received, cdpClient=connected, reloadPending=false
+[2026-03-13T22:28:23.747Z] INFO /_coverage: takePreciseCoverage succeeded: 4 scripts
+[2026-03-13T22:28:23.950Z] INFO detachedFromTarget: session 9511FAF177A59E0CF7E7C77B71D7B898 detached — cdpClient → null
+[2026-03-13T22:28:23.971Z] INFO browser: browser-level connection closed
+[2026-03-13T22:30:20.676Z] connectChromeDevTools: Error: connect ECONNREFUSED 127.0.0.1:9223
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2026-03-13T22:30:21.196Z] INFO connectChromeDevTools: browser-level connection established
+[2026-03-13T22:30:21.197Z] INFO attachedToTarget: page target 9B11A011014F91ADAD9E2BDEAFF93882, sessionId=EA08A0E7FC3DB8FB33B748D5F945346D, waitingForDebugger=false
+[2026-03-13T22:30:21.197Z] INFO connectChromeDevTools: setAutoAttach configured
+[2026-03-13T22:30:21.202Z] INFO attachedToTarget: coverage started on session EA08A0E7FC3DB8FB33B748D5F945346D
+[2026-03-13T22:30:21.249Z] attachedToTarget clearBrowserCache: TypeError: session.Network.clearBrowserCache is not a function
+    at Chrome.<anonymous> (file:///Users/psego/Development/NullVoxPopuli/ember-code-coverage/src/testem/middleware.js:416:37)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[2026-03-13T22:30:21.260Z] INFO attachedToTarget: page target 44F5A73031F047F9C92302791BC8EE62, sessionId=5A9CE56CBDF860C28901CA51A125132B, waitingForDebugger=true
+[2026-03-13T22:30:21.262Z] INFO attachedToTarget: new coverage tab opened for http://localhost:61780/372078244405208/tests/index.html?hidepassed (target 44F5A73031F047F9C92302791BC8EE62)
+[2026-03-13T22:30:21.267Z] INFO attachedToTarget: coverage started on session 5A9CE56CBDF860C28901CA51A125132B
+[2026-03-13T22:30:21.269Z] INFO attachedToTarget: HTTP cache disabled for session 5A9CE56CBDF860C28901CA51A125132B
+[2026-03-13T22:30:21.271Z] INFO attachedToTarget: V8 compilation cache cleared for session 5A9CE56CBDF860C28901CA51A125132B
+[2026-03-13T22:30:21.271Z] INFO attachedToTarget: session 5A9CE56CBDF860C28901CA51A125132B resumed — coverage ready
+[2026-03-13T22:30:21.410Z] INFO /_coverage: request received, cdpClient=connected, reloadPending=false
+[2026-03-13T22:30:21.413Z] INFO /_coverage: takePreciseCoverage succeeded: 4 scripts
+[2026-03-13T22:30:21.602Z] INFO detachedFromTarget: session 5A9CE56CBDF860C28901CA51A125132B detached — cdpClient → null
+[2026-03-13T22:30:21.621Z] INFO browser: browser-level connection closed

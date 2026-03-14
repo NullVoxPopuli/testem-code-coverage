@@ -9,7 +9,9 @@ if (typeof module !== "undefined") {
     launch_in_dev: ["Chrome"],
     middleware: [
       require("testem-code-coverage").middleware({
-        /* optional config here */
+        // dist-tests is the Vite output dir for this addon's test build;
+        // the default is "dist" which matches vite-app-js but not here.
+        distDir: "dist-tests",
         chrome: {
           remoteDebuggingPort: 9223,
         },

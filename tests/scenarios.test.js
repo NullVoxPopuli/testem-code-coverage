@@ -32,9 +32,18 @@ for (const name of scenarios) {
     // These assertions express what the coverage plugin MUST get right on every
     // platform: the two never-called methods on Counter (clampedCount,
     // countAsString) must appear as uncovered.
+    //
+    // The counter component lives at different paths per scenario
+    // (e.g. app/components/counter.gjs vs src/components/counter.gjs),
+    // so we find it by key suffix rather than hardcoding the full path.
     describe("correctness invariants", () => {
+      function findCounter(summary) {
+        const key = Object.keys(summary).find((k) => k.endsWith("components/counter.gjs"));
+        return key ? summary[key] : undefined;
+      }
+
       test("counter.gjs: exactly 2 functions are uncovered (clampedCount, countAsString)", () => {
-        const counter = summary["app/components/counter.gjs"];
+        const counter = findCounter(summary);
         expect(counter, "counter.gjs entry exists in coverage report").toBeDefined();
         const uncovered = counter.functions.total - counter.functions.covered;
         expect(
@@ -45,7 +54,7 @@ for (const name of scenarios) {
       });
 
       test("counter.gjs: get label and increment ARE covered", () => {
-        const counter = summary["app/components/counter.gjs"];
+        const counter = findCounter(summary);
         expect(
           counter.functions.covered,
           "at least get label + increment should be covered",
@@ -53,7 +62,7 @@ for (const name of scenarios) {
       });
 
       test("counter.gjs: line coverage is partial (template block not fully exercised)", () => {
-        const counter = summary["app/components/counter.gjs"];
+        const counter = findCounter(summary);
         expect(counter.lines.covered, "some lines covered").toBeGreaterThan(0);
         expect(counter.lines.pct, "line coverage is less than 100%").toBeLessThan(100);
       });
