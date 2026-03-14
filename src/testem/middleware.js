@@ -466,25 +466,25 @@ export function middleware(options = {}) {
   return function coverageMiddleware(app) {
     app.get(REPORT_TO_MIDDLEWARE_PATH, async (req, res) => {
       logInfo(
-        "/_coverage",
+        REPORT_TO_MIDDLEWARE_PATH,
         `request received, cdpClient=${cdpClient ? "connected" : "null"}, reloadPending=${reloadPending}`,
       );
 
       // Stale-request gate
       // ------------------
       // reloadPending is true between the moment we send Page.reload() and the
-      // moment the new page's /_coverage request is processed. Any request that
+      // moment the new page's REPORT_TO_MIDDLEWARE_PATH request is processed. Any request that
       // arrives while the flag is set came from the pre-reload test run — its
       // coverage data is useless (scripts hadn't run under coverage yet).
       //
       // We hold this stale connection open (the QUnit adapter's keepAlive timer
       // keeps Chrome alive while the fetch is pending) and wait for the new
-      // page's /_coverage handler to collect correct coverage and resolve
+      // page's REPORT_TO_MIDDLEWARE_PATH handler to collect correct coverage and resolve
       // newCoveragePromise. Then we close this stale connection gracefully.
       if (reloadPending) {
         reloadPending = false;
         logInfo(
-          "/_coverage",
+          REPORT_TO_MIDDLEWARE_PATH,
           "stale request (reload pending) — holding connection, waiting for post-reload coverage",
         );
         await Promise.race([
