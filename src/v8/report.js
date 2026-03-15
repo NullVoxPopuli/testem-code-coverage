@@ -12,8 +12,6 @@ import libCoverage from "istanbul-lib-coverage";
 import libReport from "istanbul-lib-report";
 import reports from "istanbul-reports";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 /**
  * Resolve package names (e.g. "my-addon", "@scope/pkg") to their absolute
  * directories inside node_modules, using `import.meta.resolve` anchored at
@@ -48,7 +46,28 @@ async function resolveIncludedPaths(include, cwd) {
         const pkgName = parts[0].startsWith("@") && parts[1] ? parts[0] + "/" + parts[1] : parts[0];
         includedPaths.push(resolvedPath.slice(0, nmIdx + marker.length) + pkgName + "/");
       } else {
-        includedPaths.push(resolvedPath);
+        // Workspace package or local path — the resolved path is the package's
+        // main entry (e.g. /proj/packages/my-pkg/src/index.js). Walk up from the
+        // resolved file to find the directory that contains package.json; that is
+        // the package root.
+        let dir = path.dirname(resolvedPath);
+        let pkgRoot = null;
+        let depth = 0;
+        const maxDepth = 20; // guard against infinite loops on unusual filesystems
+        while (dir !== path.dirname(dir) && depth < maxDepth) {
+          if (fs.existsSync(path.join(dir, "package.json"))) {
+            pkgRoot = dir;
+            break;
+          }
+          dir = path.dirname(dir);
+          depth++;
+        }
+        if (!pkgRoot) {
+          console.warn(
+            `[coverage] Could not find package.json for "${name}" — using resolved file directory as fallback.`,
+          );
+        }
+        includedPaths.push((pkgRoot ?? path.dirname(resolvedPath)) + path.sep);
       }
     } catch (err) {
       console.warn(
@@ -132,17 +151,57 @@ function syntheticUncoveredMethods(
     return { line: lo + 1, column: offset - lineStarts[lo] };
   }
 
+  // Build a map from original source URL → Set of line numbers that V8 covers
+  // with count > 0. When a method's source map position is in this set, V8 has
+  // already tracked it as covered — even if its BUNDLE position doesn't exactly
+  // match acorn's MethodDefinition.start. This handles build configurations such
+  // as babelHelpers:'inline' or decorator-transforms that produce compiled output
+  // where V8 tracks methods at different byte offsets than what acorn sees.
+  //
+  // We scan ALL ranges within each V8 function entry, not just ranges[0]. With
+  // `detailed: true` block-level coverage, each function entry contains sub-ranges
+  // with independent counts. When V8 does not create a separate function entry for
+  // a class method (e.g. due to lazy-compilation under babelHelpers:'runtime'),
+  // it still emits block-level sub-ranges for the executed code inside the
+  // containing function. These sub-ranges have the method's start offset and
+  // count > 0, allowing us to detect coverage even without a dedicated V8 entry.
+  const coveredLinesBySource = new Map(); // source → Set<line>
+  if (tracer) {
+    for (const fn of v8Functions) {
+      for (const range of fn.ranges) {
+        if ((range.count ?? 0) > 0) {
+          const { line, column } = offsetToLineCol(range.startOffset);
+          const orig = originalPositionFor(tracer, { line, column });
+          if (orig.source && orig.line != null) {
+            let lines = coveredLinesBySource.get(orig.source);
+            if (!lines) {
+              lines = new Set();
+              coveredLinesBySource.set(orig.source, lines);
+            }
+            lines.add(orig.line);
+          }
+        }
+      }
+    }
+  }
+
   /** Returns true if the given original source URL is a local app file or an explicitly included package. */
   function isLocalSource(source) {
     if (!source) return false;
     if (!source.includes("node_modules") && !source.includes("/.embroider/")) return true;
-    // Allow files from explicitly included packages.  We check for the
-    // 'node_modules/<pkg>/' segment (without the absolute prefix) so that
-    // both absolute paths and relative source-map sources are matched.
+    // Allow files from explicitly included packages.  We check both:
+    //  1. Absolute path prefix match (works when Vite resolves workspace deps to
+    //     real paths: /proj/packages/my-pkg/src/... )
+    //  2. 'node_modules/<pkg>/' segment match (works when the source map uses the
+    //     symlinked path: ../../node_modules/my-pkg/src/...)
     return includedPaths.some((pkgDir) => {
       const marker = "/node_modules/";
       const nmIdx = pkgDir.indexOf(marker);
-      if (nmIdx === -1) return source.startsWith(pkgDir);
+      if (nmIdx === -1) {
+        // Workspace / real-path package: check absolute prefix.
+        return source.startsWith(pkgDir);
+      }
+      // node_modules package: check for the 'node_modules/<pkg>/' segment.
       const pkgSegment = pkgDir.slice(nmIdx + 1); // e.g. "node_modules/my-pkg/"
       return source.includes(pkgSegment);
     });
@@ -168,18 +227,27 @@ function syntheticUncoveredMethods(
             : "";
       const methodLabel = `${kind}${name}`;
       const keyStart = node.key?.start ?? node.start;
-      const inV8 = knownStarts.has(node.start) || knownStarts.has(keyStart);
+      // Primary check: exact bundle-position match between acorn MethodDefinition
+      // and V8 function start (most reliable on all platforms).
+      // Fallback: source-map based check — if V8 has already covered the original
+      // source line that this MethodDefinition maps to (with count > 0), the method
+      // IS tracked by V8 (just at a different bundle position). This handles build
+      // configurations like babelHelpers:'inline' or decorator-transforms that produce
+      // compiled output where V8 and acorn disagree on byte positions.
+      let origSource = null;
+      let origLine = null;
+      if (tracer) {
+        const { line, column } = offsetToLineCol(node.start);
+        const orig = originalPositionFor(tracer, { line, column });
+        origSource = orig.source;
+        origLine = orig.line;
+      }
+      const coveredBySourceMap = coveredLinesBySource.get(origSource)?.has(origLine) ?? false;
+      const inV8 = knownStarts.has(node.start) || knownStarts.has(keyStart) || coveredBySourceMap;
 
       if (!inV8) {
         // Determine whether this method maps to a local app source file.
-        let isLocal = true; // default: include when no source map available
-        let origSource = null;
-        if (tracer) {
-          const { line, column } = offsetToLineCol(node.start);
-          const orig = originalPositionFor(tracer, { line, column });
-          origSource = orig.source;
-          isLocal = isLocalSource(orig.source);
-        }
+        const isLocal = tracer ? isLocalSource(origSource) : true;
         // Only log local-source methods to keep diagnostics concise.
         if (isLocal) {
           diag(
@@ -195,21 +263,19 @@ function syntheticUncoveredMethods(
           });
         }
       } else {
-        // Method IS in V8 — find and log its count to help debug cross-platform differences.
+        // Method IS in V8 — log it for diagnostics.
         const v8fn = v8Functions.find(
           (f) => f.ranges[0]?.startOffset === node.start || f.ranges[0]?.startOffset === keyStart,
         );
-        if (v8fn) {
-          // Determine if this is a local source (to keep log concise).
-          let origSource = null;
-          if (tracer) {
-            const { line, column } = offsetToLineCol(node.start);
-            const orig = originalPositionFor(tracer, { line, column });
-            origSource = orig.source;
-          }
-          if (isLocalSource(origSource)) {
+        const localForLog = tracer ? isLocalSource(origSource) : false;
+        if (localForLog) {
+          if (v8fn) {
             diag(
               `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) in V8 count=${v8fn.ranges[0]?.count} name="${v8fn.functionName}"`,
+            );
+          } else if (coveredBySourceMap) {
+            diag(
+              `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) in V8 via source-map (source=${origSource}:${origLine})`,
             );
           }
         }
@@ -341,7 +407,20 @@ export async function generateReport(v8Scripts, options = {}) {
       includedPaths.some((pkgDir) => {
         const marker = "/node_modules/";
         const nmIdx = pkgDir.indexOf(marker);
-        if (nmIdx === -1) return file.startsWith(pkgDir);
+        if (nmIdx === -1) {
+          // Workspace package: check absolute prefix (real path match) and
+          // also check the node_modules symlink path using the package name.
+          if (file.startsWith(pkgDir)) return true;
+          try {
+            // pkgDir ends with a path separator; strip it to get the directory.
+            const pkgJsonPath = path.join(pkgDir.slice(0, -path.sep.length), "package.json");
+            const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+            const pkgName = pkgJson.name;
+            return pkgName && file.includes(`/node_modules/${pkgName}/`);
+          } catch {
+            return false;
+          }
+        }
         const pkgSegment = pkgDir.slice(nmIdx + 1); // e.g. "node_modules/my-pkg/"
         return file.includes(pkgSegment);
       })

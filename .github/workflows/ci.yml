@@ -36,17 +36,19 @@ jobs:
       - name: Show coverage error log (on failure)
         if: failure()
         run: |
-          LOG=test-scenarios/vite-app-js/coverage/errors.log
-          if [ -f "$LOG" ]; then
-            echo "=== $LOG ==="
-            cat "$LOG"
-          else
-            echo "(no errors.log found — coverage directory was never created)"
-          fi
-          DIAG=test-scenarios/vite-app-js/coverage/coverage-debug.log
-          if [ -f "$DIAG" ]; then
-            echo "=== $DIAG ==="
-            cat "$DIAG"
-          else
-            echo "(no coverage-debug.log found)"
-          fi
+          for SCENARIO in vite-app-js v2-addon-js vite-app-using-v2-addon-js; do
+            LOG=test-scenarios/$SCENARIO/coverage/errors.log
+            if [ -f "$LOG" ]; then
+              echo "=== $LOG ==="
+              cat "$LOG"
+            else
+              echo "(no $LOG found)"
+            fi
+            DIAG=test-scenarios/$SCENARIO/coverage/coverage-debug.log
+            if [ -f "$DIAG" ]; then
+              echo "=== $DIAG ==="
+              cat "$DIAG"
+            else
+              echo "(no $DIAG found)"
+            fi
+          done

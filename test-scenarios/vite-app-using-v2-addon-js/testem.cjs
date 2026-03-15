@@ -11,6 +11,9 @@ if (typeof module !== 'undefined') {
     middleware: [
       require('testem-code-coverage').middleware({
         include: ['v2-addon-js'],
+        chrome: {
+          remoteDebuggingPort: 9224,
+        },
       }),
     ],
     browser_args: {
@@ -22,10 +25,10 @@ if (typeof module !== 'undefined') {
           '--disable-dev-shm-usage',
           '--disable-software-rasterizer',
           '--mute-audio',
-          '--remote-debugging-port=9222',
+          '--remote-debugging-port=9224',
           '--window-size=1440,900',
         ].filter(Boolean),
-        dev: ['--remote-debugging-port=9222'],
+        dev: ['--remote-debugging-port=9224'],
       },
     },
   };
