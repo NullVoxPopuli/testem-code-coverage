@@ -22,9 +22,7 @@ describe("local counter.gjs (app/components/counter.gjs)", () => {
   function findLocalCounter() {
     // Keys are relative to the scenario dir, so the local counter is just
     // "app/components/counter.gjs" — no scenario name in the path.
-    const key = Object.keys(summary).find(
-      (k) => k === "app/components/counter.gjs",
-    );
+    const key = Object.keys(summary).find((k) => k === "app/components/counter.gjs");
     return key ? summary[key] : undefined;
   }
 

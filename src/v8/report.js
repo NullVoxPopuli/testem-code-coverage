@@ -45,16 +45,15 @@ async function resolveIncludedPaths(include, cwd) {
       if (nmIdx !== -1) {
         const afterNm = resolvedPath.slice(nmIdx + marker.length);
         const parts = afterNm.split("/");
-        const pkgName =
-          parts[0].startsWith("@") && parts[1]
-            ? parts[0] + "/" + parts[1]
-            : parts[0];
+        const pkgName = parts[0].startsWith("@") && parts[1] ? parts[0] + "/" + parts[1] : parts[0];
         includedPaths.push(resolvedPath.slice(0, nmIdx + marker.length) + pkgName + "/");
       } else {
         includedPaths.push(resolvedPath);
       }
     } catch (err) {
-      console.warn(`[coverage] Could not resolve included package "${name}" from project root — skipping. (${err.message})`);
+      console.warn(
+        `[coverage] Could not resolve included package "${name}" from project root — skipping. (${err.message})`,
+      );
     }
   }
 
@@ -76,7 +75,13 @@ async function resolveIncludedPaths(include, cwd) {
  * data before passing to v8-to-istanbul so that never-called class methods are
  * correctly marked as uncovered.
  */
-function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {}, includedPaths = []) {
+function syntheticUncoveredMethods(
+  source,
+  v8Functions,
+  filePath,
+  diag = () => {},
+  includedPaths = [],
+) {
   // Build a set of start offsets already present in V8 coverage data.
   // V8 uses the start of the method name as the startOffset (e.g., the 'i' in
   // 'increment()'), which matches acorn's MethodDefinition.start.
@@ -305,7 +310,13 @@ export async function generateReport(v8Scripts, options = {}) {
       // Augment V8 data with synthetic count=0 entries for class methods that
       // V8 never compiled (never called) — they would otherwise default to the
       // parent scope's count=1, producing a false "100% covered" result.
-      const synth = syntheticUncoveredMethods(source, script.functions, filePath, diag, includedPaths);
+      const synth = syntheticUncoveredMethods(
+        source,
+        script.functions,
+        filePath,
+        diag,
+        includedPaths,
+      );
       if (synth.length > 0) {
         diag(
           `  → ${synth.length} synthetic entries added: ${synth.map((s) => s.functionName).join(", ")}`,
