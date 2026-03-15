@@ -106,17 +106,6 @@ function syntheticUncoveredMethods(
   // 'increment()'), which matches acorn's MethodDefinition.start.
   const knownStarts = new Set(v8Functions.map((f) => f.ranges[0]?.startOffset));
 
-  // Also build a sorted array of V8 function ranges for range-based matching.
-  // Used as a fallback when the exact start offset doesn't match (e.g. when
-  // babelHelpers:'inline' or certain decorator transforms produce slightly
-  // different offsets in the bundle vs what V8 reports). Any V8 function whose
-  // start offset falls within a MethodDefinition's declaration range is treated
-  // as the same function — preventing a false synthetic count=0 entry that would
-  // override the real V8 coverage count.
-  const v8Ranges = v8Functions
-    .map((f) => ({ start: f.ranges[0]?.startOffset, end: f.ranges[0]?.endOffset }))
-    .filter((r) => r.start != null && r.end != null);
-
   // Diagnostic: collect local method ranges for post-walk nearby-V8-function logging.
   const localMethodRanges = [];
 
@@ -162,6 +151,31 @@ function syntheticUncoveredMethods(
     return { line: lo + 1, column: offset - lineStarts[lo] };
   }
 
+  // Build a map from original source URL → Set of line numbers that V8 covers
+  // with count > 0. When a method's source map position is in this set, V8 has
+  // already tracked it as covered — even if its BUNDLE position doesn't exactly
+  // match acorn's MethodDefinition.start. This handles build configurations such
+  // as babelHelpers:'inline' or decorator-transforms that produce compiled output
+  // where V8 tracks methods at different byte offsets than what acorn sees.
+  const coveredLinesBySource = new Map(); // source → Set<line>
+  if (tracer) {
+    for (const fn of v8Functions) {
+      if ((fn.ranges[0]?.count ?? 0) > 0) {
+        const offset = fn.ranges[0].startOffset;
+        const { line, column } = offsetToLineCol(offset);
+        const orig = originalPositionFor(tracer, { line, column });
+        if (orig.source && orig.line != null) {
+          let lines = coveredLinesBySource.get(orig.source);
+          if (!lines) {
+            lines = new Set();
+            coveredLinesBySource.set(orig.source, lines);
+          }
+          lines.add(orig.line);
+        }
+      }
+    }
+  }
+
   /** Returns true if the given original source URL is a local app file or an explicitly included package. */
   function isLocalSource(source) {
     if (!source) return false;
@@ -204,27 +218,27 @@ function syntheticUncoveredMethods(
             : "";
       const methodLabel = `${kind}${name}`;
       const keyStart = node.key?.start ?? node.start;
-      // Primary check: exact start offset match (most reliable on all platforms).
-      // Fallback: any V8 function whose start offset falls within the MethodDefinition's
-      // range [node.start, node.end). This handles build configurations (e.g.
-      // babelHelpers:'inline', certain decorator transforms) where V8 and acorn disagree
-      // on the exact byte offset of the method declaration but the function body is
-      // correctly attributed to this method.
-      const inV8 =
-        knownStarts.has(node.start) ||
-        knownStarts.has(keyStart) ||
-        v8Ranges.some((r) => r.start >= node.start && r.start < node.end);
+      // Primary check: exact bundle-position match between acorn MethodDefinition
+      // and V8 function start (most reliable on all platforms).
+      // Fallback: source-map based check — if V8 has already covered the original
+      // source line that this MethodDefinition maps to (with count > 0), the method
+      // IS tracked by V8 (just at a different bundle position). This handles build
+      // configurations like babelHelpers:'inline' or decorator-transforms that produce
+      // compiled output where V8 and acorn disagree on byte positions.
+      let origSource = null;
+      let origLine = null;
+      if (tracer) {
+        const { line, column } = offsetToLineCol(node.start);
+        const orig = originalPositionFor(tracer, { line, column });
+        origSource = orig.source;
+        origLine = orig.line;
+      }
+      const coveredBySourceMap = coveredLinesBySource.get(origSource)?.has(origLine) ?? false;
+      const inV8 = knownStarts.has(node.start) || knownStarts.has(keyStart) || coveredBySourceMap;
 
       if (!inV8) {
         // Determine whether this method maps to a local app source file.
-        let isLocal = true; // default: include when no source map available
-        let origSource = null;
-        if (tracer) {
-          const { line, column } = offsetToLineCol(node.start);
-          const orig = originalPositionFor(tracer, { line, column });
-          origSource = orig.source;
-          isLocal = isLocalSource(orig.source);
-        }
+        const isLocal = tracer ? isLocalSource(origSource) : true;
         // Only log local-source methods to keep diagnostics concise.
         if (isLocal) {
           diag(
@@ -240,26 +254,19 @@ function syntheticUncoveredMethods(
           });
         }
       } else {
-        // Method IS in V8 — find and log its count to help debug cross-platform differences.
-        const v8fn =
-          v8Functions.find(
-            (f) =>
-              f.ranges[0]?.startOffset === node.start || f.ranges[0]?.startOffset === keyStart,
-          ) ??
-          v8Functions.find(
-            (f) => f.ranges[0]?.startOffset >= node.start && f.ranges[0]?.startOffset < node.end,
-          );
-        if (v8fn) {
-          // Determine if this is a local source (to keep log concise).
-          let origSource = null;
-          if (tracer) {
-            const { line, column } = offsetToLineCol(node.start);
-            const orig = originalPositionFor(tracer, { line, column });
-            origSource = orig.source;
-          }
-          if (isLocalSource(origSource)) {
+        // Method IS in V8 — log it for diagnostics.
+        const v8fn = v8Functions.find(
+          (f) => f.ranges[0]?.startOffset === node.start || f.ranges[0]?.startOffset === keyStart,
+        );
+        const localForLog = tracer ? isLocalSource(origSource) : false;
+        if (localForLog) {
+          if (v8fn) {
             diag(
               `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) in V8 count=${v8fn.ranges[0]?.count} name="${v8fn.functionName}"`,
+            );
+          } else if (coveredBySourceMap) {
+            diag(
+              `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) in V8 via source-map (source=${origSource}:${origLine})`,
             );
           }
         }
