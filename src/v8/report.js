@@ -157,20 +157,29 @@ function syntheticUncoveredMethods(
   // match acorn's MethodDefinition.start. This handles build configurations such
   // as babelHelpers:'inline' or decorator-transforms that produce compiled output
   // where V8 tracks methods at different byte offsets than what acorn sees.
+  //
+  // We scan ALL ranges within each V8 function entry, not just ranges[0]. With
+  // `detailed: true` block-level coverage, each function entry contains sub-ranges
+  // with independent counts. When V8 does not create a separate function entry for
+  // a class method (e.g. due to lazy-compilation under babelHelpers:'runtime'),
+  // it still emits block-level sub-ranges for the executed code inside the
+  // containing function. These sub-ranges have the method's start offset and
+  // count > 0, allowing us to detect coverage even without a dedicated V8 entry.
   const coveredLinesBySource = new Map(); // source → Set<line>
   if (tracer) {
     for (const fn of v8Functions) {
-      if ((fn.ranges[0]?.count ?? 0) > 0) {
-        const offset = fn.ranges[0].startOffset;
-        const { line, column } = offsetToLineCol(offset);
-        const orig = originalPositionFor(tracer, { line, column });
-        if (orig.source && orig.line != null) {
-          let lines = coveredLinesBySource.get(orig.source);
-          if (!lines) {
-            lines = new Set();
-            coveredLinesBySource.set(orig.source, lines);
+      for (const range of fn.ranges) {
+        if ((range.count ?? 0) > 0) {
+          const { line, column } = offsetToLineCol(range.startOffset);
+          const orig = originalPositionFor(tracer, { line, column });
+          if (orig.source && orig.line != null) {
+            let lines = coveredLinesBySource.get(orig.source);
+            if (!lines) {
+              lines = new Set();
+              coveredLinesBySource.set(orig.source, lines);
+            }
+            lines.add(orig.line);
           }
-          lines.add(orig.line);
         }
       }
     }
