@@ -1,0 +1,78 @@
+import { describe, test, expect, beforeAll } from "vitest";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { runScenario, readCoverageSummary } from "./helpers.ts";
+
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const scenarioDir = join(repoRoot, "test-scenarios", "vite-app-using-v2-addon-js");
+
+let summary;
+
+beforeAll(() => {
+  runScenario(scenarioDir);
+  summary = readCoverageSummary(scenarioDir);
+});
+
+test("coverage directory was created", () => {
+  expect(existsSync(join(scenarioDir, "coverage")), "coverage directory was created").toBe(true);
+});
+
+describe("local counter.gjs (app/components/counter.gjs)", () => {
+  function findLocalCounter() {
+    const key = Object.keys(summary).find(
+      (k) => k.endsWith("app/components/counter.gjs") && k.includes("vite-app-using-v2-addon-js"),
+    );
+    return key ? summary[key] : undefined;
+  }
+
+  test("exists in coverage report", () => {
+    expect(findLocalCounter(), "local counter.gjs entry exists").toBeDefined();
+  });
+
+  test("line coverage is partial (template block not fully exercised)", () => {
+    const counter = findLocalCounter();
+    expect(counter.lines.covered, "some lines covered").toBeGreaterThan(0);
+    expect(counter.lines.pct, "line coverage is less than 100%").toBeLessThan(100);
+  });
+});
+
+describe("addon counter.gjs (v2-addon-js/src/components/counter.gjs)", () => {
+  function findAddonCounter() {
+    const key = Object.keys(summary).find(
+      (k) => k.endsWith("components/counter.gjs") && k.includes("v2-addon-js/src"),
+    );
+    return key ? summary[key] : undefined;
+  }
+
+  test("addon counter.gjs is included via the include option", () => {
+    expect(findAddonCounter(), "addon counter.gjs entry exists").toBeDefined();
+  });
+
+  test("line coverage is partial (template block not fully exercised)", () => {
+    const counter = findAddonCounter();
+    expect(counter.lines.covered, "some lines covered").toBeGreaterThan(0);
+    expect(counter.lines.pct, "line coverage is less than 100%").toBeLessThan(100);
+  });
+});
+
+describe("format-score.js", () => {
+  function findFormatScore() {
+    const key = Object.keys(summary).find((k) => k.endsWith("utils/format-score.js"));
+    return key ? summary[key] : undefined;
+  }
+
+  test("exists in coverage report", () => {
+    expect(findFormatScore(), "format-score.js entry exists").toBeDefined();
+  });
+
+  test("function is covered", () => {
+    const entry = findFormatScore();
+    expect(entry.functions.covered).toBeGreaterThanOrEqual(1);
+  });
+
+  test("line coverage is partial (score < 0 branch not exercised)", () => {
+    const entry = findFormatScore();
+    expect(entry.lines.pct, "line coverage is less than 100%").toBeLessThan(100);
+  });
+});
