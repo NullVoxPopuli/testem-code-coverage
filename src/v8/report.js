@@ -4,7 +4,7 @@
 
 import path from "node:path";
 import fs from "node:fs";
-import { URL, fileURLToPath } from "node:url";
+import { URL, fileURLToPath, pathToFileURL } from "node:url";
 import { parse as acornParse } from "acorn";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import v8ToIstanbul from "v8-to-istanbul";
@@ -13,6 +13,53 @@ import libReport from "istanbul-lib-report";
 import reports from "istanbul-reports";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Resolve package names (e.g. "my-addon", "@scope/pkg") to their absolute
+ * directories inside node_modules, using `import.meta.resolve` anchored at
+ * the project root (process.cwd()).  Only packages that are directly
+ * resolvable from the project root are considered — nested/transitive
+ * dependencies that are not hoisted are silently skipped.
+ *
+ * @param {string[]} include  Package names from the `include` option.
+ * @param {string}   cwd      Project root directory.
+ * @returns {Promise<string[]>} Absolute directory paths, each ending with "/".
+ */
+async function resolveIncludedPaths(include, cwd) {
+  if (!include || include.length === 0) return [];
+
+  const cwdUrl = pathToFileURL(cwd.endsWith(path.sep) ? cwd : cwd + path.sep);
+  const includedPaths = [];
+
+  for (const name of include) {
+    try {
+      // Resolve from the project root, not from this library's own location.
+      const resolved = import.meta.resolve(name, cwdUrl);
+      const resolvedPath = fileURLToPath(resolved);
+
+      // Walk up to the package root inside node_modules.
+      // e.g. /proj/node_modules/my-pkg/dist/index.js → /proj/node_modules/my-pkg/
+      //      /proj/node_modules/@scope/pkg/dist/index.js → /proj/node_modules/@scope/pkg/
+      const marker = "/node_modules/";
+      const nmIdx = resolvedPath.indexOf(marker);
+      if (nmIdx !== -1) {
+        const afterNm = resolvedPath.slice(nmIdx + marker.length);
+        const parts = afterNm.split("/");
+        const pkgName =
+          parts[0].startsWith("@") && parts[1]
+            ? parts[0] + "/" + parts[1]
+            : parts[0];
+        includedPaths.push(resolvedPath.slice(0, nmIdx + marker.length) + pkgName + "/");
+      } else {
+        includedPaths.push(resolvedPath);
+      }
+    } catch (err) {
+      console.warn(`[coverage] Could not resolve included package "${name}" from project root — skipping. (${err.message})`);
+    }
+  }
+
+  return includedPaths;
+}
 
 /**
  * V8's startPreciseCoverage does not force eager compilation of class methods.
@@ -29,7 +76,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * data before passing to v8-to-istanbul so that never-called class methods are
  * correctly marked as uncovered.
  */
-function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {}) {
+function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {}, includedPaths = []) {
   // Build a set of start offsets already present in V8 coverage data.
   // V8 uses the start of the method name as the startOffset (e.g., the 'i' in
   // 'increment()'), which matches acorn's MethodDefinition.start.
@@ -80,11 +127,20 @@ function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {
     return { line: lo + 1, column: offset - lineStarts[lo] };
   }
 
-  /** Returns true if the given original source URL is a local app file. */
+  /** Returns true if the given original source URL is a local app file or an explicitly included package. */
   function isLocalSource(source) {
     if (!source) return false;
-    // Exclude any file that comes from node_modules or Embroider's .embroider cache.
-    return !source.includes("node_modules") && !source.includes("/.embroider/");
+    if (!source.includes("node_modules") && !source.includes("/.embroider/")) return true;
+    // Allow files from explicitly included packages.  We check for the
+    // 'node_modules/<pkg>/' segment (without the absolute prefix) so that
+    // both absolute paths and relative source-map sources are matched.
+    return includedPaths.some((pkgDir) => {
+      const marker = "/node_modules/";
+      const nmIdx = pkgDir.indexOf(marker);
+      if (nmIdx === -1) return source.startsWith(pkgDir);
+      const pkgSegment = pkgDir.slice(nmIdx + 1); // e.g. "node_modules/my-pkg/"
+      return source.includes(pkgSegment);
+    });
   }
 
   const synthetic = [];
@@ -198,6 +254,11 @@ function syntheticUncoveredMethods(source, v8Functions, filePath, diag = () => {
 export async function generateReport(v8Scripts, options = {}) {
   const distDir = options.distDir ?? path.join(process.cwd(), "dist");
   const coverageDir = options.coverageDir ?? path.join(process.cwd(), "coverage");
+  const cwd = process.cwd();
+
+  // Resolve any explicitly included package names to their node_modules
+  // directories so they survive the node_modules filter step below.
+  const includedPaths = await resolveIncludedPaths(options.include ?? [], cwd);
   // Only process local script files served by the testem dev server.
   const localScripts = v8Scripts.filter(
     (s) =>
@@ -244,7 +305,7 @@ export async function generateReport(v8Scripts, options = {}) {
       // Augment V8 data with synthetic count=0 entries for class methods that
       // V8 never compiled (never called) — they would otherwise default to the
       // parent scope's count=1, producing a false "100% covered" result.
-      const synth = syntheticUncoveredMethods(source, script.functions, filePath, diag);
+      const synth = syntheticUncoveredMethods(source, script.functions, filePath, diag, includedPaths);
       if (synth.length > 0) {
         diag(
           `  → ${synth.length} synthetic entries added: ${synth.map((s) => s.functionName).join(", ")}`,
@@ -258,10 +319,22 @@ export async function generateReport(v8Scripts, options = {}) {
     }
   }
 
-  // Remove noise: node_modules and Embroider internals.
+  // Remove noise: node_modules and Embroider internals, unless the user
+  // explicitly included that package via the `include` option.
   const filteredMap = libCoverage.createCoverageMap({});
   for (const file of coverageMap.files()) {
-    if (!file.includes("node_modules") && !file.includes("/.embroider/")) {
+    const isNodeModules = file.includes("node_modules") || file.includes("/.embroider/");
+    if (!isNodeModules) {
+      filteredMap.addFileCoverage(coverageMap.fileCoverageFor(file));
+    } else if (
+      includedPaths.some((pkgDir) => {
+        const marker = "/node_modules/";
+        const nmIdx = pkgDir.indexOf(marker);
+        if (nmIdx === -1) return file.startsWith(pkgDir);
+        const pkgSegment = pkgDir.slice(nmIdx + 1); // e.g. "node_modules/my-pkg/"
+        return file.includes(pkgSegment);
+      })
+    ) {
       filteredMap.addFileCoverage(coverageMap.fileCoverageFor(file));
     }
   }
