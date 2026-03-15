@@ -20,8 +20,10 @@ test("coverage directory was created", () => {
 
 describe("local counter.gjs (app/components/counter.gjs)", () => {
   function findLocalCounter() {
+    // Keys are relative to the scenario dir, so the local counter is just
+    // "app/components/counter.gjs" — no scenario name in the path.
     const key = Object.keys(summary).find(
-      (k) => k.endsWith("app/components/counter.gjs") && k.includes("vite-app-using-v2-addon-js"),
+      (k) => k === "app/components/counter.gjs",
     );
     return key ? summary[key] : undefined;
   }
@@ -71,8 +73,8 @@ describe("format-score.js", () => {
     expect(entry.functions.covered).toBeGreaterThanOrEqual(1);
   });
 
-  test("line coverage is partial (score < 0 branch not exercised)", () => {
+  test("line coverage is 100%", () => {
     const entry = findFormatScore();
-    expect(entry.lines.pct, "line coverage is less than 100%").toBeLessThan(100);
+    expect(entry.lines.pct).toBe(100);
   });
 });
