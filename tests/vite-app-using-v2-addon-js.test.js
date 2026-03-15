@@ -49,6 +49,22 @@ describe("addon counter.gjs (v2-addon-js/src/components/counter.gjs)", () => {
     expect(findAddonCounter(), "addon counter.gjs entry exists").toBeDefined();
   });
 
+  test("exactly 2 functions are uncovered (clampedCount, countAsString)", () => {
+    const counter = findAddonCounter();
+    const uncovered = counter.functions.total - counter.functions.covered;
+    expect(uncovered, "clampedCount and countAsString should be the only uncovered functions").toBe(
+      2,
+    );
+  });
+
+  test("get label and increment ARE covered", () => {
+    const counter = findAddonCounter();
+    expect(
+      counter.functions.covered,
+      "at least get label + increment should be covered",
+    ).toBeGreaterThanOrEqual(2);
+  });
+
   test("line coverage is partial (template block not fully exercised)", () => {
     const counter = findAddonCounter();
     expect(counter.lines.covered, "some lines covered").toBeGreaterThan(0);
