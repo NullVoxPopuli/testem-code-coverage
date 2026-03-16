@@ -368,11 +368,12 @@ export async function generateReport(v8Scripts, options = {}) {
     let filePath;
     try {
       const parsed = new URL(script.url);
-      filePath = path.join(distDir, parsed.pathname);
+      filePath = path.resolve(distDir, parsed.pathname.slice(1));
     } catch {
       continue;
     }
 
+    if (!filePath.startsWith(distDir + path.sep) && filePath !== distDir) continue;
     if (!fs.existsSync(filePath)) continue;
 
     try {
@@ -453,7 +454,13 @@ export async function generateReport(v8Scripts, options = {}) {
   }
 
   // Clean previous output so stale files from prior runs don't linger.
-  fs.rmSync(coverageDir, { recursive: true, force: true });
+  const resolvedCoverageDir = path.resolve(coverageDir);
+  if (!resolvedCoverageDir.startsWith(cwd + path.sep) && resolvedCoverageDir !== cwd) {
+    throw new Error(
+      `[coverage] coverageDir "${coverageDir}" resolves outside the project root — refusing to delete.`,
+    );
+  }
+  fs.rmSync(resolvedCoverageDir, { recursive: true, force: true });
   fs.mkdirSync(coverageDir, { recursive: true });
 
   // Write diagnostic log for debugging cross-platform coverage differences.
