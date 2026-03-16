@@ -71,7 +71,14 @@ import { REPORT_TO_MIDDLEWARE_PATH } from "#utils";
 const CHECK_INTERVAL = 500; // ms
 
 export function middleware(options = {}) {
-  const { outputFolder = "coverage", distDir, handleReport, include, chrome } = options;
+  const {
+    outputFolder = "coverage",
+    distDir,
+    handleReport,
+    include,
+    chrome,
+    debug = false,
+  } = options;
   const { connectionTimeout = 30_000, remoteDebuggingPort = 9222 } = chrome || {};
 
   const cwd = process.cwd();
@@ -123,12 +130,13 @@ export function middleware(options = {}) {
   const errorLog = join(outputPath, "errors.log");
 
   function writeLog(line) {
-    process.stderr.write(line);
+    if (debug) process.stderr.write(line);
     try {
       fs.mkdirSync(outputPath, { recursive: true });
       fs.appendFileSync(errorLog, line);
     } catch {
-      // If we can't write the log file, stderr above is the fallback.
+      // If we can't write the log file, stderr is the fallback.
+      if (!debug) process.stderr.write(line);
     }
   }
 
@@ -552,6 +560,7 @@ export function middleware(options = {}) {
           coverageDir: outputPath,
           distDir,
           include,
+          debug,
         });
 
         await handleReport?.(coverageResult);

@@ -354,11 +354,12 @@ export async function generateReport(v8Scripts, options = {}) {
     return;
   }
 
+  const debug = options.debug ?? false;
   const diagLines = [];
   function diag(...args) {
     const line = args.join(" ");
     diagLines.push(line);
-    console.log("[coverage-diag]", line);
+    if (debug) console.log("[coverage-diag]", line);
   }
 
   const coverageMap = libCoverage.createCoverageMap({});
