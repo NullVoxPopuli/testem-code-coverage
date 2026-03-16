@@ -340,7 +340,7 @@ const DEFAULT_EXCLUDE = [
 ];
 
 export async function generateReport(v8Scripts, options = {}) {
-  const distDir = options.distDir ?? path.join(process.cwd(), "dist");
+  const distDir = path.resolve(options.distDir ?? "dist");
   const coverageDir = options.coverageDir ?? path.join(process.cwd(), "coverage");
   const cwd = process.cwd();
   const excludePatterns = options.exclude ?? DEFAULT_EXCLUDE;
