@@ -1,4 +1,4 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["test-scenarios/**", "dist/**", ".github/**", "**/__snapshots__/**"]
+  "ignorePatterns": ["test-scenarios/**", "dist/**", ".github/**", "**/__snapshots__/**", "CHANGELOG.md"]
 }
