@@ -1,6 +1,6 @@
 # testem-code-coverage
 
-Get _browser_ test coverage using a [chrome-specific feature](https://developer.chrome.com/docs/devtools/coverage), [`startPreciseCoverage`](https://chromedevtools.github.io/devtools-protocol/tot/Profiler/#method-startPreciseCoverage).
+Get _browser_ test coverage, without sus babel plugins, using a [chrome-specific feature](https://developer.chrome.com/docs/devtools/coverage), [`startPreciseCoverage`](https://chromedevtools.github.io/devtools-protocol/tot/Profiler/#method-startPreciseCoverage).
 
 Works with any test framework, but presently only provides an adapter for qunit.
 
