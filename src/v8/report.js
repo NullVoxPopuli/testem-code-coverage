@@ -12,6 +12,7 @@ import v8ToIstanbul from "v8-to-istanbul";
 import libCoverage from "istanbul-lib-coverage";
 import libReport from "istanbul-lib-report";
 import reports from "istanbul-reports";
+import picomatch from "picomatch";
 
 /**
  * Resolve package names (e.g. "my-addon", "@scope/pkg") to their absolute
@@ -330,10 +331,14 @@ function syntheticUncoveredMethods(
   return synthetic;
 }
 
+const DEFAULT_EXCLUDE = ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"];
+
 export async function generateReport(v8Scripts, options = {}) {
   const distDir = options.distDir ?? path.join(process.cwd(), "dist");
   const coverageDir = options.coverageDir ?? path.join(process.cwd(), "coverage");
   const cwd = process.cwd();
+  const excludePatterns = options.exclude ?? DEFAULT_EXCLUDE;
+  const isExcluded = excludePatterns.length > 0 ? picomatch(excludePatterns) : () => false;
 
   // Resolve any explicitly included package names to their directories
   // so they survive the node_modules filter step below.
@@ -425,6 +430,9 @@ export async function generateReport(v8Scripts, options = {}) {
   }
 
   for (const file of coverageMap.files()) {
+    // Compute the relative path for exclude-pattern matching.
+    const relPath = file.startsWith(cwdPrefix) ? file.slice(cwdPrefix.length) : file;
+
     const pkg = findIncludedPackage(file);
     if (pkg) {
       // Included package — remap its path under cwd so the HTML report
@@ -435,10 +443,12 @@ export async function generateReport(v8Scripts, options = {}) {
             file.indexOf(`/node_modules/${pkg.name}/`) + `/node_modules/${pkg.name}/`.length,
           );
       const remapped = path.join(cwd, pkg.name, relInPkg);
+      if (isExcluded(relPath)) continue;
       const fc = coverageMap.fileCoverageFor(file);
       fc.data.path = remapped;
       filteredMap.addFileCoverage(fc);
     } else if (file.startsWith(cwdPrefix)) {
+      if (isExcluded(relPath)) continue;
       // Local project file — keep as-is.
       filteredMap.addFileCoverage(coverageMap.fileCoverageFor(file));
     }

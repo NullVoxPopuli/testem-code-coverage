@@ -83,6 +83,18 @@ require("testem-code-coverage").middleware({
   include: [],
 
   /**
+   * Glob patterns for files to exclude from the coverage report.
+   * Matched against relative paths from the project root.
+   *
+   * Defaults to:
+   *   ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"]
+   *
+   * Setting this replaces the defaults entirely.
+   * Pass an empty array to disable all exclusions.
+   */
+  exclude: ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"],
+
+  /**
    * async callback that can be used to generate additional
    * report formats.
    *

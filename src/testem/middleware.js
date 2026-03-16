@@ -76,6 +76,7 @@ export function middleware(options = {}) {
     distDir,
     handleReport,
     include,
+    exclude,
     chrome,
     debug = false,
   } = options;
@@ -560,6 +561,7 @@ export function middleware(options = {}) {
           coverageDir: outputPath,
           distDir,
           include,
+          exclude,
           debug,
         });
 
