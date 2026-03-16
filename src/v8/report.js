@@ -354,11 +354,12 @@ export async function generateReport(v8Scripts, options = {}) {
     return;
   }
 
+  const debug = options.debug ?? false;
   const diagLines = [];
   function diag(...args) {
     const line = args.join(" ");
     diagLines.push(line);
-    console.log("[coverage-diag]", line);
+    if (debug) console.log("[coverage-diag]", line);
   }
 
   const coverageMap = libCoverage.createCoverageMap({});
@@ -451,9 +452,14 @@ export async function generateReport(v8Scripts, options = {}) {
     return;
   }
 
-  // --- Terminal output ---
-  console.log("\n");
-  const textContext = libReport.createContext({
+  // Clean previous output so stale files from prior runs don't linger.
+  fs.rmSync(coverageDir, { recursive: true, force: true });
+  fs.mkdirSync(coverageDir, { recursive: true });
+
+  // Write diagnostic log for debugging cross-platform coverage differences.
+  fs.writeFileSync(path.join(coverageDir, "coverage-debug.log"), diagLines.join("\n") + "\n");
+
+  const context = libReport.createContext({
     dir: coverageDir,
     coverageMap: filteredMap,
     watermarks: {
@@ -463,25 +469,17 @@ export async function generateReport(v8Scripts, options = {}) {
       lines: [50, 80],
     },
   });
-  reports.create("text").execute(textContext);
 
-  // --- HTML + JSON summary reports ---
-  // Clean previous output so stale files from prior runs don't linger.
-  fs.rmSync(coverageDir, { recursive: true, force: true });
-  fs.mkdirSync(coverageDir, { recursive: true });
+  // Terminal output
+  console.log("\n");
+  reports.create("text").execute(context);
 
-  // Write diagnostic log for debugging cross-platform coverage differences.
-  fs.writeFileSync(path.join(coverageDir, "coverage-debug.log"), diagLines.join("\n") + "\n");
-
-  const fileContext = libReport.createContext({
-    dir: coverageDir,
-    coverageMap: filteredMap,
-  });
-  reports.create("html").execute(fileContext);
+  // HTML + JSON summary reports
+  reports.create("html").execute(context);
   // json-summary writes coverage-summary.json — consumed by integration tests.
-  reports.create("json-summary").execute(fileContext);
+  reports.create("json-summary").execute(context);
   // text report written to file mirrors the terminal table output.
-  reports.create("text", { file: "coverage-summary.txt" }).execute(fileContext);
+  reports.create("text", { file: "coverage-summary.txt" }).execute(context);
   console.log(`\nHTML coverage report → ${path.join(coverageDir, "index.html")}\n`);
 }
 
