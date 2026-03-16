@@ -1,0 +1,36 @@
+"use strict";
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    test_page: "tests/index.html?hidepassed",
+    cwd: "dist-tests",
+    disable_watching: true,
+    launch_in_ci: ["Chrome"],
+    launch_in_dev: ["Chrome"],
+    middleware: [
+      require("testem-code-coverage").middleware({
+        // dist-tests is the Vite output dir for this addon's test build;
+        // the default is "dist" which matches vite-app-js but not here.
+        distDir: "dist-tests",
+        chrome: {
+          remoteDebuggingPort: 9223,
+        },
+      }),
+    ],
+    browser_start_timeout: 120,
+    browser_args: {
+      Chrome: {
+        ci: [
+          // --no-sandbox is needed when running Chrome inside a container
+          process.env.CI ? "--no-sandbox" : null,
+          "--headless",
+          "--disable-dev-shm-usage",
+          "--disable-software-rasterizer",
+          "--mute-audio",
+          "--remote-debugging-port=9223",
+          "--window-size=1440,900",
+        ].filter(Boolean),
+      },
+    },
+  };
+}

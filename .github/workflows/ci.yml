@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  format:
+    name: Check Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: pnpm/action-setup@v4.2.0
+      - uses: actions/setup-node@v6.3.0
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm format:check
+      - run: pnpm lint
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: pnpm/action-setup@v4.2.0
+      - uses: actions/setup-node@v6.3.0
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm test
+      - name: Show coverage error log (on failure)
+        if: failure()
+        run: |
+          for SCENARIO in vite-app-js v2-addon-js vite-app-using-v2-addon-js; do
+            LOG=test-scenarios/$SCENARIO/coverage/errors.log
+            if [ -f "$LOG" ]; then
+              echo "=== $LOG ==="
+              cat "$LOG"
+            else
+              echo "(no $LOG found)"
+            fi
+            DIAG=test-scenarios/$SCENARIO/coverage/coverage-debug.log
+            if [ -f "$DIAG" ]; then
+              echo "=== $DIAG ==="
+              cat "$DIAG"
+            else
+              echo "(no $DIAG found)"
+            fi
+          done
