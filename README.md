@@ -43,15 +43,15 @@ module.exports = {
 };
 ```
 
-Setup qunit
+Setup the runtime
 
 ```js
 // tests/test-helper.js
-import { setupCoverage } from "testem-code-coverage/qunit";
+import { setupCoverage } from "testem-code-coverage/runtime";
 
 export async function start() {
   // ... must come before tests are started
-  setupCoverage(QUnit);
+  setupCoverage();
   // ...
   qunitStart();
 }

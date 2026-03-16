@@ -15,7 +15,7 @@
   },
   "exports": {
     ".": "./src/testem/middleware.js",
-    "./qunit": "./src/adapters/qunit.js"
+    "./runtime": "./src/testem/runtime.js"
   },
   "scripts": {
     "lint": "oxlint && pnpm format:check",
