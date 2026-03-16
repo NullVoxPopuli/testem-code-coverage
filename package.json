@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:NullVoxPopuli/testem-code-coverage.git"
+  },
   "license": "MIT",
   "author": "",
-  "files": [
-    "src"
-  ],
   "type": "module",
   "imports": {
     "#utils": "./src/utils.js",
@@ -17,11 +18,14 @@
     ".": "./src/testem/middleware.js",
     "./runtime": "./src/testem/runtime.js"
   },
+  "files": [
+    "src"
+  ],
   "scripts": {
-    "lint": "oxlint && pnpm format:check",
-    "lint:fix": "oxlint --fix && oxfmt",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
+    "lint": "oxlint && pnpm format:check",
+    "lint:fix": "oxlint --fix && oxfmt",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -38,10 +42,11 @@
   "devDependencies": {
     "oxfmt": "latest",
     "oxlint": "latest",
+    "release-plan": "^0.17.4",
     "vitest": "^4.0.18"
   },
+  "packageManager": "pnpm@10.31.0",
   "engines": {
     "node": "^22.19.0 || ^24.0.0"
-  },
-  "packageManager": "pnpm@10.31.0"
+  }
 }
