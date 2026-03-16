@@ -2,6 +2,9 @@
 import { REPORT_TO_MIDDLEWARE_PATH } from "#utils";
 
 export function setupCoverage() {
+  // Testem will not be defined at dev-time
+  if (typeof Testem === "undefined") return;
+
   // Use Testem.afterTests() to collect coverage before Chrome is killed.
   //
   // Why Testem.afterTests() instead of QUnit.done()
