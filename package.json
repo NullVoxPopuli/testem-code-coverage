@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "description": "",
   "keywords": [],
+  "license": "MIT",
+  "author": "",
   "repository": {
     "type": "git",
     "url": "git@github.com:NullVoxPopuli/testem-code-coverage.git"
   },
-  "license": "MIT",
-  "author": "",
+  "files": [
+    "src"
+  ],
   "type": "module",
   "imports": {
     "#utils": "./src/utils.js",
@@ -18,9 +21,6 @@
     ".": "./src/testem/middleware.js",
     "./runtime": "./src/testem/runtime.js"
   },
-  "files": [
-    "src"
-  ],
   "scripts": {
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -45,8 +45,8 @@
     "release-plan": "^0.17.4",
     "vitest": "^4.0.18"
   },
-  "packageManager": "pnpm@10.31.0",
   "engines": {
     "node": "^22.19.0 || ^24.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.31.0"
 }

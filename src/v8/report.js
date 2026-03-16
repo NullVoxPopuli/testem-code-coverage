@@ -331,7 +331,13 @@ function syntheticUncoveredMethods(
   return synthetic;
 }
 
-const DEFAULT_EXCLUDE = ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"];
+const DEFAULT_EXCLUDE = [
+  "**/tests/**",
+  "**/node_modules/**",
+  "**/.embroider/**",
+  "**/embroider-implicit-modules/**",
+  "**/-embroider-*",
+];
 
 export async function generateReport(v8Scripts, options = {}) {
   const distDir = options.distDir ?? path.join(process.cwd(), "dist");
