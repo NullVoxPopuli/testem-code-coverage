@@ -4,7 +4,8 @@
 
 import path from "node:path";
 import fs from "node:fs";
-import { URL, fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
+import { URL } from "node:url";
 import { parse as acornParse } from "acorn";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import v8ToIstanbul from "v8-to-istanbul";
@@ -14,26 +15,27 @@ import reports from "istanbul-reports";
 
 /**
  * Resolve package names (e.g. "my-addon", "@scope/pkg") to their absolute
- * directories inside node_modules, using `import.meta.resolve` anchored at
- * the project root (process.cwd()).  Only packages that are directly
- * resolvable from the project root are considered — nested/transitive
- * dependencies that are not hoisted are silently skipped.
+ * directories, using `createRequire` anchored at the project root
+ * (process.cwd()).  Only packages that are directly resolvable from the
+ * project root are considered — nested/transitive dependencies that are not
+ * hoisted are silently skipped.
  *
  * @param {string[]} include  Package names from the `include` option.
  * @param {string}   cwd      Project root directory.
- * @returns {Promise<string[]>} Absolute directory paths, each ending with "/".
+ * @returns {Promise<{dir: string, name: string}[]>} Objects with absolute
+ *   directory path (ending with "/") and the package name.
  */
 async function resolveIncludedPaths(include, cwd) {
   if (!include || include.length === 0) return [];
 
-  const cwdUrl = pathToFileURL(cwd.endsWith(path.sep) ? cwd : cwd + path.sep);
-  const includedPaths = [];
+  // Use createRequire anchored at the project root so resolution walks
+  // node_modules from there, not from this library's own location.
+  const require = createRequire(path.join(cwd, "package.json"));
+  const results = [];
 
   for (const name of include) {
     try {
-      // Resolve from the project root, not from this library's own location.
-      const resolved = import.meta.resolve(name, cwdUrl);
-      const resolvedPath = fileURLToPath(resolved);
+      const resolvedPath = require.resolve(name);
 
       // Walk up to the package root inside node_modules.
       // e.g. /proj/node_modules/my-pkg/dist/index.js → /proj/node_modules/my-pkg/
@@ -44,7 +46,10 @@ async function resolveIncludedPaths(include, cwd) {
         const afterNm = resolvedPath.slice(nmIdx + marker.length);
         const parts = afterNm.split("/");
         const pkgName = parts[0].startsWith("@") && parts[1] ? parts[0] + "/" + parts[1] : parts[0];
-        includedPaths.push(resolvedPath.slice(0, nmIdx + marker.length) + pkgName + "/");
+        results.push({
+          dir: resolvedPath.slice(0, nmIdx + marker.length) + pkgName + "/",
+          name: pkgName,
+        });
       } else {
         // Workspace package or local path — the resolved path is the package's
         // main entry (e.g. /proj/packages/my-pkg/src/index.js). Walk up from the
@@ -67,7 +72,10 @@ async function resolveIncludedPaths(include, cwd) {
             `[coverage] Could not find package.json for "${name}" — using resolved file directory as fallback.`,
           );
         }
-        includedPaths.push((pkgRoot ?? path.dirname(resolvedPath)) + path.sep);
+        results.push({
+          dir: (pkgRoot ?? path.dirname(resolvedPath)) + path.sep,
+          name,
+        });
       }
     } catch (err) {
       console.warn(
@@ -76,7 +84,7 @@ async function resolveIncludedPaths(include, cwd) {
     }
   }
 
-  return includedPaths;
+  return results;
 }
 
 /**
@@ -327,9 +335,10 @@ export async function generateReport(v8Scripts, options = {}) {
   const coverageDir = options.coverageDir ?? path.join(process.cwd(), "coverage");
   const cwd = process.cwd();
 
-  // Resolve any explicitly included package names to their node_modules
-  // directories so they survive the node_modules filter step below.
-  const includedPaths = await resolveIncludedPaths(options.include ?? [], cwd);
+  // Resolve any explicitly included package names to their directories
+  // so they survive the node_modules filter step below.
+  const includedPackages = await resolveIncludedPaths(options.include ?? [], cwd);
+  const includedPaths = includedPackages.map((p) => p.dir);
   // Only process local script files served by the testem dev server.
   const localScripts = v8Scripts.filter(
     (s) =>
@@ -396,37 +405,42 @@ export async function generateReport(v8Scripts, options = {}) {
     }
   }
 
-  // Remove noise: node_modules and Embroider internals, unless the user
-  // explicitly included that package via the `include` option.
+  // Remove noise: keep only files under the project root or in explicitly
+  // included packages.  This filters out node_modules, Embroider internals,
+  // and any library source files that leaked in via source maps.
+  const cwdPrefix = cwd.endsWith(path.sep) ? cwd : cwd + path.sep;
   const filteredMap = libCoverage.createCoverageMap({});
+
+  /** If `file` belongs to an included package, return that package; else undefined. */
+  function findIncludedPackage(file) {
+    return includedPackages.find((pkg) => {
+      // Direct absolute-path match (real path or workspace symlink).
+      if (file.startsWith(pkg.dir)) return true;
+      // node_modules symlink: check for 'node_modules/<name>/' segment.
+      if (file.includes(`/node_modules/${pkg.name}/`)) return true;
+      return false;
+    });
+  }
+
   for (const file of coverageMap.files()) {
-    const isNodeModules = file.includes("node_modules") || file.includes("/.embroider/");
-    if (!isNodeModules) {
-      filteredMap.addFileCoverage(coverageMap.fileCoverageFor(file));
-    } else if (
-      includedPaths.some((pkgDir) => {
-        const marker = "/node_modules/";
-        const nmIdx = pkgDir.indexOf(marker);
-        if (nmIdx === -1) {
-          // Workspace package: check absolute prefix (real path match) and
-          // also check the node_modules symlink path using the package name.
-          if (file.startsWith(pkgDir)) return true;
-          try {
-            // pkgDir ends with a path separator; strip it to get the directory.
-            const pkgJsonPath = path.join(pkgDir.slice(0, -path.sep.length), "package.json");
-            const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
-            const pkgName = pkgJson.name;
-            return pkgName && file.includes(`/node_modules/${pkgName}/`);
-          } catch {
-            return false;
-          }
-        }
-        const pkgSegment = pkgDir.slice(nmIdx + 1); // e.g. "node_modules/my-pkg/"
-        return file.includes(pkgSegment);
-      })
-    ) {
+    const pkg = findIncludedPackage(file);
+    if (pkg) {
+      // Included package — remap its path under cwd so the HTML report
+      // shows it as "<pkg-name>/..." instead of a deep relative path.
+      const relInPkg = file.startsWith(pkg.dir)
+        ? file.slice(pkg.dir.length)
+        : file.slice(
+            file.indexOf(`/node_modules/${pkg.name}/`) + `/node_modules/${pkg.name}/`.length,
+          );
+      const remapped = path.join(cwd, pkg.name, relInPkg);
+      const fc = coverageMap.fileCoverageFor(file);
+      fc.data.path = remapped;
+      filteredMap.addFileCoverage(fc);
+    } else if (file.startsWith(cwdPrefix)) {
+      // Local project file — keep as-is.
       filteredMap.addFileCoverage(coverageMap.fileCoverageFor(file));
     }
+    // Everything else (library internals, node_modules, .embroider) is dropped.
   }
 
   if (filteredMap.files().length === 0) {
@@ -452,6 +466,8 @@ export async function generateReport(v8Scripts, options = {}) {
   reports.create("text").execute(textContext);
 
   // --- HTML + JSON summary reports ---
+  // Clean previous output so stale files from prior runs don't linger.
+  fs.rmSync(coverageDir, { recursive: true, force: true });
   fs.mkdirSync(coverageDir, { recursive: true });
 
   // Write diagnostic log for debugging cross-platform coverage differences.
