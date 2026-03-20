@@ -70,6 +70,24 @@ import { REPORT_TO_MIDDLEWARE_PATH } from "#utils";
 
 const CHECK_INTERVAL = 500; // ms
 
+function normalizeReporters(reporters) {
+  if (reporters === undefined) return undefined;
+
+  if (!Array.isArray(reporters)) {
+    throw new TypeError("[coverage] reporters must be an array of Istanbul reporter names.");
+  }
+
+  const normalized = reporters.map((reporter) => {
+    if (typeof reporter !== "string" || reporter.trim() === "") {
+      throw new TypeError("[coverage] reporters must only contain non-empty strings.");
+    }
+
+    return reporter.trim();
+  });
+
+  return [...new Set(normalized)];
+}
+
 export function middleware(options = {}) {
   const {
     outputFolder = "coverage",
@@ -79,8 +97,10 @@ export function middleware(options = {}) {
     exclude,
     chrome,
     debug = false,
+    reporters,
   } = options;
   const { connectionTimeout = 30_000, remoteDebuggingPort = 9222 } = chrome || {};
+  const normalizedReporters = normalizeReporters(reporters);
 
   const cwd = process.cwd();
   let cdpClient = null;
@@ -313,7 +333,10 @@ export function middleware(options = {}) {
         try {
           const session = createSessionClient(browser, sessionId);
           await session.Profiler.enable();
-          await session.Profiler.startPreciseCoverage({ callCount: true, detailed: true });
+          await session.Profiler.startPreciseCoverage({
+            callCount: true,
+            detailed: true,
+          });
           logInfo("attachedToTarget", `coverage started on session ${sessionId}`);
 
           if (waitingForDebugger) {
@@ -413,7 +436,9 @@ export function middleware(options = {}) {
             // Open fresh tab at the test URL. waitForDebuggerOnStart pauses it
             // before any JS, giving us the waitingForDebugger=true path above
             // for coverage setup (cache clear + resume).
-            const { targetId } = await browser.Target.createTarget({ url: testUrl });
+            const { targetId } = await browser.Target.createTarget({
+              url: testUrl,
+            });
             coverageTabTargetId = targetId;
             logInfo(
               "attachedToTarget",
@@ -563,6 +588,7 @@ export function middleware(options = {}) {
           include,
           exclude,
           debug,
+          reporters: normalizedReporters,
         });
 
         await handleReport?.(coverageResult);

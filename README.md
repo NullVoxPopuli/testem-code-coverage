@@ -95,6 +95,19 @@ require("testem-code-coverage").middleware({
   exclude: ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"],
 
   /**
+   * Built-in Istanbul reporters to run.
+   *
+   * Defaults to ["text", "html", "json-summary"].
+   *
+   * Any reporter name supported by istanbul-reports can be used here,
+   * for example: "lcov", "cobertura", "json", or "text-summary".
+   *
+   * When omitted, the default behavior is preserved, including writing
+   * coverage/coverage-summary.txt via the text reporter.
+   */
+  reporters: ["text", "html", "json-summary"],
+
+  /**
    * async callback that can be used to generate additional
    * report formats.
    *
@@ -120,8 +133,31 @@ require("testem-code-coverage").middleware({
      */
     remoteDebuggingPort: 9222,
   },
+
+  /**
+   * When true, write middleware diagnostics to stderr and coverage/errors.log.
+   */
+  debug: false,
 });
 ```
+
+### Reporter selection
+
+Use `reporters` when you want to choose which built-in Istanbul outputs are written.
+
+```js
+require("testem-code-coverage").middleware({
+  reporters: ["html", "json-summary", "lcov"],
+});
+```
+
+- `reporters` accepts reporter names as strings.
+- Any reporter supported by `istanbul-reports` can be used.
+- Omitting `reporters` preserves the current default outputs: terminal `text`, `html`, `json-summary`, and `coverage-summary.txt`.
+- Setting `reporters` replaces the defaults entirely.
+- If `text` is included, the middleware also writes `coverage/coverage-summary.txt`.
+
+Use `handleReport` only when you need custom post-processing beyond Istanbul's built-in reporters.
 
 ## Caveats about the implementation details
 
