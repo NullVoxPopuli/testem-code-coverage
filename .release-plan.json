@@ -2,17 +2,13 @@
   "solution": {
     "testem-code-coverage": {
       "impact": "minor",
-      "oldVersion": "0.0.0",
-      "newVersion": "0.1.0",
+      "oldVersion": "0.1.0",
+      "newVersion": "0.2.0",
       "tagName": "latest",
       "constraints": [
         {
           "impact": "minor",
           "reason": "Appears in changelog section :rocket: Enhancement"
-        },
-        {
-          "impact": "patch",
-          "reason": "Appears in changelog section :bug: Bug Fix"
         },
         {
           "impact": "patch",
@@ -22,5 +18,5 @@
       "pkgJSONPath": "./package.json"
     }
   },
-  "description": "## Release (2026-03-16)\n\n* testem-code-coverage 0.1.0 (minor)\n\n#### :rocket: Enhancement\n* `testem-code-coverage`\n  * [#1](https://github.com/NullVoxPopuli/testem-code-coverage/pull/1) Implementation ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n  * [#6](https://github.com/NullVoxPopuli/testem-code-coverage/pull/6) Implement `include` option to track coverage of project-resolvable library packages ([@Copilot](https://github.com/apps/copilot-swe-agent))\n\n#### :bug: Bug Fix\n* `testem-code-coverage`\n  * [#8](https://github.com/NullVoxPopuli/testem-code-coverage/pull/8) Fix intermittent `functions.covered=0` for v2-addon-js counter; fix workspace `include` resolution ([@Copilot](https://github.com/apps/copilot-swe-agent))\n  * [#7](https://github.com/NullVoxPopuli/testem-code-coverage/pull/7) Fix flaky scenario tests: sequential execution + correct coverage assertion ([@Copilot](https://github.com/apps/copilot-swe-agent))\n\n#### :house: Internal\n* `testem-code-coverage`\n  * [#15](https://github.com/NullVoxPopuli/testem-code-coverage/pull/15) fix ci ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n  * [#14](https://github.com/NullVoxPopuli/testem-code-coverage/pull/14) Set package as private in package.json ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n  * [#12](https://github.com/NullVoxPopuli/testem-code-coverage/pull/12) Add release plan ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n  * [#11](https://github.com/NullVoxPopuli/testem-code-coverage/pull/11) Cleanup ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n  * [#10](https://github.com/NullVoxPopuli/testem-code-coverage/pull/10) Claude simplify ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n  * [#9](https://github.com/NullVoxPopuli/testem-code-coverage/pull/9) Fix flaky function-coverage assertions that depend on V8 JIT nondeterminism ([@Copilot](https://github.com/apps/copilot-swe-agent))\n  * [#5](https://github.com/NullVoxPopuli/testem-code-coverage/pull/5) Remove stale standalone CLI usage from report.js header comment ([@Copilot](https://github.com/apps/copilot-swe-agent))\n  * [#4](https://github.com/NullVoxPopuli/testem-code-coverage/pull/4) test: move scenario setup into beforeAll to eliminate inter-test dependencies ([@Copilot](https://github.com/apps/copilot-swe-agent))\n\n#### Committers: 2\n- Copilot [Bot] ([@copilot-swe-agent](https://github.com/apps/copilot-swe-agent))\n- [@NullVoxPopuli](https://github.com/NullVoxPopuli)\n"
+  "description": "## Release (2026-03-20)\n\n* testem-code-coverage 0.2.0 (minor)\n\n#### :rocket: Enhancement\n* `testem-code-coverage`\n  * [#18](https://github.com/NullVoxPopuli/testem-code-coverage/pull/18) Add reporters config and more documentation ([@LucasHillDex](https://github.com/LucasHillDex))\n\n#### :house: Internal\n* `testem-code-coverage`\n  * [#16](https://github.com/NullVoxPopuli/testem-code-coverage/pull/16) Ignore changelog in oxfmt ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n\n#### Committers: 2\n- Lucas Hill ([@LucasHillDex](https://github.com/LucasHillDex))\n- [@NullVoxPopuli](https://github.com/NullVoxPopuli)\n"
 }

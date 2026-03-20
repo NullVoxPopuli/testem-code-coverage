@@ -1,5 +1,21 @@
 # Changelog
 
+## Release (2026-03-20)
+
+* testem-code-coverage 0.2.0 (minor)
+
+#### :rocket: Enhancement
+* `testem-code-coverage`
+  * [#18](https://github.com/NullVoxPopuli/testem-code-coverage/pull/18) Add reporters config and more documentation ([@LucasHillDex](https://github.com/LucasHillDex))
+
+#### :house: Internal
+* `testem-code-coverage`
+  * [#16](https://github.com/NullVoxPopuli/testem-code-coverage/pull/16) Ignore changelog in oxfmt ([@NullVoxPopuli](https://github.com/NullVoxPopuli))
+
+#### Committers: 2
+- Lucas Hill ([@LucasHillDex](https://github.com/LucasHillDex))
+- [@NullVoxPopuli](https://github.com/NullVoxPopuli)
+
 ## Release (2026-03-16)
 
 * testem-code-coverage 0.1.0 (minor)
