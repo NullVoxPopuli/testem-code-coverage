@@ -57,6 +57,21 @@ export async function start() {
 }
 ```
 
+### Vite
+
+If you are using Vite, source maps must be enabled for the build that serves your browser tests.
+
+```js
+// vite.config.mjs
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  build: {
+    sourcemap: true,
+  },
+});
+```
+
 ## Configuration
 
 ### Testem
@@ -73,6 +88,12 @@ require("testem-code-coverage").middleware({
    * including: HTML, JSON, and TXT
    */
   outputFolder: "coverage",
+
+  /**
+   * Path to the built assets that Chrome loads during the test run.
+   * Defaults to "dist".
+   */
+  distDir: "dist",
 
   /**
    * Paths to include in the coverage report.
@@ -93,6 +114,19 @@ require("testem-code-coverage").middleware({
    * Pass an empty array to disable all exclusions.
    */
   exclude: ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"],
+
+  /**
+   * Built-in Istanbul reporters to run.
+   *
+   * Defaults to ["text", "html", "json-summary"].
+   *
+   * Any reporter name supported by istanbul-reports can be used here,
+   * for example: "lcov", "cobertura", "json", or "text-summary".
+   *
+   * When omitted, the default behavior is preserved, including writing
+   * coverage/coverage-summary.txt via the text reporter.
+   */
+  reporters: ["text", "html", "json-summary"],
 
   /**
    * async callback that can be used to generate additional
@@ -120,8 +154,31 @@ require("testem-code-coverage").middleware({
      */
     remoteDebuggingPort: 9222,
   },
+
+  /**
+   * When true, write middleware diagnostics to stderr and coverage/errors.log.
+   */
+  debug: false,
 });
 ```
+
+### Reporter selection
+
+Use `reporters` when you want to choose which built-in Istanbul outputs are written.
+
+```js
+require("testem-code-coverage").middleware({
+  reporters: ["html", "json-summary", "lcov"],
+});
+```
+
+- `reporters` accepts reporter names as strings.
+- Any reporter supported by `istanbul-reports` can be used.
+- Omitting `reporters` preserves the current default outputs: terminal `text`, `html`, `json-summary`, and `coverage-summary.txt`.
+- Setting `reporters` replaces the defaults entirely.
+- If `text` is included, the middleware also writes `coverage/coverage-summary.txt`.
+
+Use `handleReport` only when you need custom post-processing beyond Istanbul's built-in reporters.
 
 ## Caveats about the implementation details
 

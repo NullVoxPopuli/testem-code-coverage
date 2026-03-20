@@ -14,6 +14,8 @@ import libReport from "istanbul-lib-report";
 import reports from "istanbul-reports";
 import picomatch from "picomatch";
 
+const DEFAULT_REPORTERS = ["text", "html", "json-summary"];
+
 /**
  * Resolve package names (e.g. "my-addon", "@scope/pkg") to their absolute
  * directories, using `createRequire` anchored at the project root
@@ -262,7 +264,11 @@ function syntheticUncoveredMethods(
           diag(
             `  MethodDef ${methodLabel} @${node.start} (key@${keyStart}) NOT in V8 — local=true source=${origSource}`,
           );
-          localMethodRanges.push({ label: methodLabel, start: node.start, end: node.end });
+          localMethodRanges.push({
+            label: methodLabel,
+            start: node.start,
+            end: node.end,
+          });
           synthetic.push({
             functionName: methodLabel,
             // Use the full MethodDefinition range so the synthetic entry spans the
@@ -344,6 +350,8 @@ export async function generateReport(v8Scripts, options = {}) {
   const coverageDir = options.coverageDir ?? path.join(process.cwd(), "coverage");
   const cwd = process.cwd();
   const excludePatterns = options.exclude ?? DEFAULT_EXCLUDE;
+  const configuredReporters = options.reporters;
+  const effectiveReporters = configuredReporters ?? DEFAULT_REPORTERS;
   const isExcluded = excludePatterns.length > 0 ? picomatch(excludePatterns) : () => false;
 
   // Resolve any explicitly included package names to their directories
@@ -493,17 +501,29 @@ export async function generateReport(v8Scripts, options = {}) {
     },
   });
 
-  // Terminal output
-  console.log("\n");
-  reports.create("text").execute(context);
+  if (effectiveReporters.length === 0) {
+    console.log("\n[coverage] No Istanbul reporters configured.");
+    return;
+  }
 
-  // HTML + JSON summary reports
-  reports.create("html").execute(context);
-  // json-summary writes coverage-summary.json — consumed by integration tests.
-  reports.create("json-summary").execute(context);
-  // text report written to file mirrors the terminal table output.
-  reports.create("text", { file: "coverage-summary.txt" }).execute(context);
-  console.log(`\nHTML coverage report → ${path.join(coverageDir, "index.html")}\n`);
+  const shouldWriteTextSummaryFile =
+    configuredReporters === undefined || effectiveReporters.includes("text");
+
+  console.log("\n");
+
+  for (const reporterName of effectiveReporters) {
+    reports.create(reporterName).execute(context);
+  }
+
+  // Preserve the legacy text summary file for the default path, and when
+  // users explicitly request the text reporter.
+  if (shouldWriteTextSummaryFile) {
+    reports.create("text", { file: "coverage-summary.txt" }).execute(context);
+  }
+
+  if (effectiveReporters.includes("html")) {
+    console.log(`\nHTML coverage report → ${path.join(coverageDir, "index.html")}\n`);
+  }
 }
 
 /**
