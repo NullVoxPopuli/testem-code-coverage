@@ -57,6 +57,21 @@ export async function start() {
 }
 ```
 
+### Vite
+
+If you are using Vite, source maps must be enabled for the build that serves your browser tests.
+
+```js
+// vite.config.mjs
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  build: {
+    sourcemap: true,
+  },
+});
+```
+
 ## Configuration
 
 ### Testem
@@ -73,6 +88,12 @@ require("testem-code-coverage").middleware({
    * including: HTML, JSON, and TXT
    */
   outputFolder: "coverage",
+
+  /**
+   * Path to the built assets that Chrome loads during the test run.
+   * Defaults to "dist".
+   */
+  distDir: "dist",
 
   /**
    * Paths to include in the coverage report.
