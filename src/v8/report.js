@@ -13,6 +13,7 @@ import libCoverage from "istanbul-lib-coverage";
 import libReport from "istanbul-lib-report";
 import reports from "istanbul-reports";
 import picomatch from "picomatch";
+import { toPosixPath } from "#utils";
 
 const DEFAULT_REPORTERS = ["text", "html", "json-summary"];
 
@@ -39,18 +40,19 @@ async function resolveIncludedPaths(include, cwd) {
   for (const name of include) {
     try {
       const resolvedPath = require.resolve(name);
+      const normalizedResolvedPath = toPosixPath(resolvedPath);
 
       // Walk up to the package root inside node_modules.
       // e.g. /proj/node_modules/my-pkg/dist/index.js → /proj/node_modules/my-pkg/
       //      /proj/node_modules/@scope/pkg/dist/index.js → /proj/node_modules/@scope/pkg/
       const marker = "/node_modules/";
-      const nmIdx = resolvedPath.indexOf(marker);
+      const nmIdx = normalizedResolvedPath.indexOf(marker);
       if (nmIdx !== -1) {
-        const afterNm = resolvedPath.slice(nmIdx + marker.length);
+        const afterNm = normalizedResolvedPath.slice(nmIdx + marker.length);
         const parts = afterNm.split("/");
         const pkgName = parts[0].startsWith("@") && parts[1] ? parts[0] + "/" + parts[1] : parts[0];
         results.push({
-          dir: resolvedPath.slice(0, nmIdx + marker.length) + pkgName + "/",
+          dir: normalizedResolvedPath.slice(0, nmIdx + marker.length) + pkgName + "/",
           name: pkgName,
         });
       } else {
@@ -76,7 +78,7 @@ async function resolveIncludedPaths(include, cwd) {
           );
         }
         results.push({
-          dir: (pkgRoot ?? path.dirname(resolvedPath)) + path.sep,
+          dir: toPosixPath((pkgRoot ?? path.dirname(resolvedPath)) + path.sep),
           name,
         });
       }
@@ -199,22 +201,26 @@ function syntheticUncoveredMethods(
   /** Returns true if the given original source URL is a local app file or an explicitly included package. */
   function isLocalSource(source) {
     if (!source) return false;
-    if (!source.includes("node_modules") && !source.includes("/.embroider/")) return true;
+    const normalizedSource = toPosixPath(source);
+    if (!normalizedSource.includes("node_modules") && !normalizedSource.includes("/.embroider/")) {
+      return true;
+    }
     // Allow files from explicitly included packages.  We check both:
     //  1. Absolute path prefix match (works when Vite resolves workspace deps to
     //     real paths: /proj/packages/my-pkg/src/... )
     //  2. 'node_modules/<pkg>/' segment match (works when the source map uses the
     //     symlinked path: ../../node_modules/my-pkg/src/...)
     return includedPaths.some((pkgDir) => {
+      const normalizedPkgDir = toPosixPath(pkgDir);
       const marker = "/node_modules/";
-      const nmIdx = pkgDir.indexOf(marker);
+      const nmIdx = normalizedPkgDir.indexOf(marker);
       if (nmIdx === -1) {
         // Workspace / real-path package: check absolute prefix.
-        return source.startsWith(pkgDir);
+        return normalizedSource.startsWith(normalizedPkgDir);
       }
       // node_modules package: check for the 'node_modules/<pkg>/' segment.
-      const pkgSegment = pkgDir.slice(nmIdx + 1); // e.g. "node_modules/my-pkg/"
-      return source.includes(pkgSegment);
+      const pkgSegment = normalizedPkgDir.slice(nmIdx + 1); // e.g. "node_modules/my-pkg/"
+      return normalizedSource.includes(pkgSegment);
     });
   }
 
@@ -339,7 +345,9 @@ function syntheticUncoveredMethods(
 
 const DEFAULT_EXCLUDE = [
   "**/tests/**",
+  "node_modules/**",
   "**/node_modules/**",
+  "**/.pnpm/**",
   "**/.embroider/**",
   "**/embroider-implicit-modules/**",
   "**/-embroider-*",
@@ -352,7 +360,8 @@ export async function generateReport(v8Scripts, options = {}) {
   const excludePatterns = options.exclude ?? DEFAULT_EXCLUDE;
   const configuredReporters = options.reporters;
   const effectiveReporters = configuredReporters ?? DEFAULT_REPORTERS;
-  const isExcluded = excludePatterns.length > 0 ? picomatch(excludePatterns) : () => false;
+  const isExcluded =
+    excludePatterns.length > 0 ? picomatch(excludePatterns, { dot: true }) : () => false;
 
   // Resolve any explicitly included package names to their directories
   // so they survive the node_modules filter step below.
@@ -434,35 +443,41 @@ export async function generateReport(v8Scripts, options = {}) {
 
   /** If `file` belongs to an included package, return that package; else undefined. */
   function findIncludedPackage(file) {
+    const normalizedFile = toPosixPath(file);
     return includedPackages.find((pkg) => {
+      const normalizedPkgDir = toPosixPath(pkg.dir);
       // Direct absolute-path match (real path or workspace symlink).
-      if (file.startsWith(pkg.dir)) return true;
+      if (normalizedFile.startsWith(normalizedPkgDir)) return true;
       // node_modules symlink: check for 'node_modules/<name>/' segment.
-      if (file.includes(`/node_modules/${pkg.name}/`)) return true;
+      if (normalizedFile.includes(`/node_modules/${pkg.name}/`)) return true;
       return false;
     });
   }
 
   for (const file of coverageMap.files()) {
+    const normalizedFile = toPosixPath(file);
     // Compute the relative path for exclude-pattern matching.
     const relPath = file.startsWith(cwdPrefix) ? file.slice(cwdPrefix.length) : file;
+    const relPathForMatch = toPosixPath(relPath);
 
     const pkg = findIncludedPackage(file);
     if (pkg) {
+      const normalizedPkgDir = toPosixPath(pkg.dir);
       // Included package — remap its path under cwd so the HTML report
       // shows it as "<pkg-name>/..." instead of a deep relative path.
-      const relInPkg = file.startsWith(pkg.dir)
-        ? file.slice(pkg.dir.length)
-        : file.slice(
-            file.indexOf(`/node_modules/${pkg.name}/`) + `/node_modules/${pkg.name}/`.length,
+      const relInPkg = normalizedFile.startsWith(normalizedPkgDir)
+        ? normalizedFile.slice(normalizedPkgDir.length)
+        : normalizedFile.slice(
+            normalizedFile.indexOf(`/node_modules/${pkg.name}/`) +
+              `/node_modules/${pkg.name}/`.length,
           );
-      const remapped = path.join(cwd, pkg.name, relInPkg);
-      if (isExcluded(relPath)) continue;
+      const remapped = path.posix.join(toPosixPath(cwd), pkg.name, relInPkg);
+      if (isExcluded(relPathForMatch)) continue;
       const fc = coverageMap.fileCoverageFor(file);
       fc.data.path = remapped;
       filteredMap.addFileCoverage(fc);
     } else if (file.startsWith(cwdPrefix)) {
-      if (isExcluded(relPath)) continue;
+      if (isExcluded(relPathForMatch)) continue;
       // Local project file — keep as-is.
       filteredMap.addFileCoverage(coverageMap.fileCoverageFor(file));
     }
