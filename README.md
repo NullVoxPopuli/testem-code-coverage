@@ -72,6 +72,20 @@ export default defineConfig({
 });
 ```
 
+## Genrating coverage
+
+To get coverage you need to run the `testem` CLI.
+
+```bash
+testem ci
+```
+
+If you're using ember, you'll want to avoid `ember test`, and reconfigure `package.json` so that your `test` script looks something like this:
+
+```
+"test": "vite build --mode development && testem ci --port 0"
+```
+
 ## Configuration
 
 ### Testem
