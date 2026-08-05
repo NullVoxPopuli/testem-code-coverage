@@ -51,7 +51,7 @@ import { setupCoverage } from "testem-code-coverage/runtime";
 
 export async function start() {
   // ... must come before tests are started
-  setupCoverage(QUnit);
+  setupCoverage();
   // ...
   qunitStart();
 }
