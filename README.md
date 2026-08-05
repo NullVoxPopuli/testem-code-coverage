@@ -25,7 +25,6 @@ Setup the testem middleware
 // testem.cjs
 module.exports = {
   // ...
-  cwd: "dist",
   middleware: [
     require("testem-code-coverage").middleware({
       /* optional config here */
