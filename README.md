@@ -25,6 +25,7 @@ Setup the testem middleware
 // testem.cjs
 module.exports = {
   // ...
+  cwd: "dist",
   middleware: [
     require("testem-code-coverage").middleware({
       /* optional config here */
@@ -51,7 +52,7 @@ import { setupCoverage } from "testem-code-coverage/runtime";
 
 export async function start() {
   // ... must come before tests are started
-  setupCoverage();
+  setupCoverage(QUnit);
   // ...
   qunitStart();
 }
@@ -70,6 +71,16 @@ export default defineConfig({
     sourcemap: true,
   },
 });
+```
+
+## Genrating coverage
+
+To get coverage you need to run `testem` directly and not use `ember test`.
+
+In `package.json` your `test` script should look something like this:
+
+```
+    "test": "vite build --mode development && testem ci --port 0"
 ```
 
 ## Configuration
