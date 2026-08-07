@@ -1,4 +1,4 @@
-# testem-code-coverage
+# testem-code-coveragee
 
 Get _browser_ test coverage, without sus babel plugins, using a [chrome-specific feature](https://developer.chrome.com/docs/devtools/coverage), [`startPreciseCoverage`](https://chromedevtools.github.io/devtools-protocol/tot/Profiler/#method-startPreciseCoverage).
 
