@@ -7,7 +7,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import { URL } from "node:url";
 import { parse as acornParse } from "acorn";
-import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+import { TraceMap, originalPositionFor, eachMapping } from "@jridgewell/trace-mapping";
 import v8ToIstanbul from "v8-to-istanbul";
 import libCoverage from "istanbul-lib-coverage";
 import libReport from "istanbul-lib-report";
@@ -108,9 +108,9 @@ async function resolveIncludedPaths(include, cwd) {
 function syntheticUncoveredMethods(
   source,
   v8Functions,
-  filePath,
   diag = () => {},
   includedPaths = [],
+  tracer = null,
 ) {
   // Build a set of start offsets already present in V8 coverage data.
   // V8 uses the start of the method name as the startOffset (e.g., the 'i' in
@@ -128,19 +128,6 @@ function syntheticUncoveredMethods(
       ast = acornParse(source, { ecmaVersion: "latest", sourceType: "script" });
     } catch {
       return [];
-    }
-  }
-
-  // Load the source map for this bundle so we can filter by original source file.
-  // If no source map exists we fall back to skipping synthetic injection entirely
-  // (better than injecting for all bundled files indiscriminately).
-  let tracer = null;
-  const mapPath = filePath + ".map";
-  if (fs.existsSync(mapPath)) {
-    try {
-      tracer = new TraceMap(JSON.parse(fs.readFileSync(mapPath, "utf8")));
-    } catch {
-      // malformed map — skip filtering
     }
   }
 
@@ -337,6 +324,208 @@ function syntheticUncoveredMethods(
   return synthetic;
 }
 
+/**
+ * Record which original-source lines have at least one mapping segment in the
+ * given bundle's source map. Used to detect code the bundler eliminated:
+ * tree-shaken functions have NO mapping anywhere, so no V8 data can ever
+ * reach them and v8-to-istanbul defaults their lines to covered.
+ *
+ * @param {TraceMap} tracer     Parsed source map of one bundle.
+ * @param {string}   bundleDir  Directory of the bundle file (map paths are
+ *                              relative to it).
+ * @param {Map<string, Set<number>>} into  source path → mapped line numbers.
+ */
+function collectMappedLines(tracer, bundleDir, into) {
+  eachMapping(tracer, (m) => {
+    if (m.source == null || m.originalLine == null) return;
+    const abs = path.resolve(bundleDir, m.source);
+    let lines = into.get(abs);
+    if (!lines) {
+      lines = new Set();
+      into.set(abs, lines);
+    }
+    lines.add(m.originalLine);
+  });
+}
+
+/**
+ * Blank out `<template>…</template>` spans so acorn can parse .gjs/.gts
+ * files. Every span is replaced by "0" (valid in both expression position and
+ * as a class member) padded with spaces; newlines are preserved so line and
+ * column numbers stay identical to the original file.
+ */
+function stripGlimmerTemplates(source) {
+  let out = "";
+  let i = 0;
+  for (;;) {
+    const open = source.indexOf("<template", i);
+    if (open === -1) {
+      out += source.slice(i);
+      break;
+    }
+    const close = source.indexOf("</template>", open);
+    if (close === -1) {
+      out += source.slice(i);
+      break;
+    }
+    const end = close + "</template>".length;
+    out += source.slice(i, open);
+    out += "0" + source.slice(open + 1, end).replace(/[^\n]/g, " ");
+    i = end;
+  }
+  return out;
+}
+
+/**
+ * Blank out decorators (`@tracked`, `@action`, `@service('store')`, …) so
+ * acorn — which does not support the decorator proposal — can parse original
+ * source files. Only parse-validity matters here, not semantics: the `@`,
+ * the (possibly dotted) decorator name, and a balanced call-argument group
+ * are replaced by spaces, preserving all offsets. An `@` inside a string
+ * (e.g. an email address) also gets blanked, which changes that string's
+ * value but never its syntax.
+ */
+function stripDecorators(source) {
+  const chars = Array.from(source);
+  const isIdent = (c) => /[\w$]/.test(c);
+
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] !== "@" || !isIdent(chars[i + 1] ?? "")) continue;
+
+    let j = i + 1;
+    while (j < chars.length && (isIdent(chars[j]) || (chars[j] === "." && isIdent(chars[j + 1])))) {
+      j++;
+    }
+    if (chars[j] === "(") {
+      let depth = 0;
+      do {
+        if (chars[j] === "(") depth++;
+        else if (chars[j] === ")") depth--;
+        j++;
+      } while (j < chars.length && depth > 0);
+    }
+    for (let k = i; k < j; k++) {
+      if (chars[k] !== "\n") chars[k] = " ";
+    }
+    i = j - 1;
+  }
+  return chars.join("");
+}
+
+/**
+ * Mark functions and classes that the bundler eliminated (tree-shaken) as
+ * uncovered in an Istanbul FileCoverage.
+ *
+ * An unexported, unreferenced function is dead-code-eliminated by
+ * rollup/vite: no compiled code exists, so V8 never sees it, the source map
+ * has no segments for its lines, and v8-to-istanbul defaults those lines to
+ * covered — a false positive (issue #22). The code was not executed, so it
+ * must be reported as uncovered.
+ *
+ * Detection: parse the ORIGINAL source file with acorn and collect every
+ * function-like declaration span (function/class declarations and
+ * function/arrow variable initializers). A span whose lines have no mapping
+ * segment in ANY bundle's source map was eliminated from the build — zero
+ * its statement counts and add an uncovered function entry. Spans with even
+ * one mapped line are left alone: the bundle kept them, so real V8 data
+ * (or the synthetic-method pass) already decides their coverage.
+ *
+ * @param {import('istanbul-lib-coverage').FileCoverage} fc
+ * @param {string}           filePath     Absolute path of the original file.
+ * @param {Set<number>|undefined} mappedLines  Lines with mapping segments.
+ * @param {(msg: string) => void} diag
+ */
+function markEliminatedFunctions(fc, filePath, mappedLines, diag) {
+  // No mapping info at all → cannot tell what was eliminated; do nothing.
+  if (!mappedLines) return;
+
+  let source;
+  try {
+    source = fs.readFileSync(filePath, "utf8");
+  } catch {
+    return;
+  }
+  if (/\.g[jt]s$/.test(filePath)) {
+    source = stripGlimmerTemplates(source);
+  }
+  source = stripDecorators(source);
+
+  let ast;
+  const acornOptions = { ecmaVersion: "latest", locations: true };
+  try {
+    ast = acornParse(source, { ...acornOptions, sourceType: "module" });
+  } catch {
+    try {
+      ast = acornParse(source, { ...acornOptions, sourceType: "script" });
+    } catch {
+      return;
+    }
+  }
+
+  // Collect candidate spans. Do not recurse into a recorded node — when an
+  // outer function was eliminated, its inner functions are gone with it and
+  // one uncovered entry for the outer construct is enough.
+  const spans = [];
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+
+    let name = null;
+    if (node.type === "FunctionDeclaration" || node.type === "ClassDeclaration") {
+      name = node.id?.name ?? "(anonymous)";
+    } else if (
+      node.type === "VariableDeclarator" &&
+      (node.init?.type === "FunctionExpression" || node.init?.type === "ArrowFunctionExpression")
+    ) {
+      name = node.id?.name ?? "(anonymous)";
+    }
+    if (name !== null) {
+      spans.push({ name, start: node.loc.start.line, end: node.loc.end.line });
+      return;
+    }
+
+    for (const key of Object.keys(node)) {
+      if (key === "start" || key === "end" || key === "type" || key === "loc") continue;
+      const val = node[key];
+      if (Array.isArray(val)) {
+        for (const child of val) {
+          if (child && typeof child === "object" && child.type) visit(child);
+        }
+      } else if (val && typeof val === "object" && val.type) {
+        visit(val);
+      }
+    }
+  }
+  visit(ast);
+
+  for (const span of spans) {
+    let mapped = false;
+    for (let line = span.start; line <= span.end; line++) {
+      if (mappedLines.has(line)) {
+        mapped = true;
+        break;
+      }
+    }
+    if (mapped) continue;
+
+    diag(`  eliminated by bundler: ${span.name} lines ${span.start}-${span.end} in ${filePath}`);
+
+    for (const [key, stmt] of Object.entries(fc.data.statementMap)) {
+      if (stmt.start.line >= span.start && stmt.start.line <= span.end) {
+        fc.data.s[key] = 0;
+      }
+    }
+
+    const fnKeys = Object.keys(fc.data.fnMap).map(Number);
+    const next = fnKeys.length > 0 ? Math.max.apply(null, fnKeys) + 1 : 0;
+    const loc = {
+      start: { line: span.start, column: 0 },
+      end: { line: span.end, column: 0 },
+    };
+    fc.data.fnMap[next] = { name: span.name, decl: loc, loc, line: span.start };
+    fc.data.f[next] = 0;
+  }
+}
+
 const DEFAULT_EXCLUDE = [
   "**/tests/**",
   "**/node_modules/**",
@@ -388,6 +577,9 @@ export async function generateReport(v8Scripts, options = {}) {
   }
 
   const coverageMap = libCoverage.createCoverageMap({});
+  // original source path → line numbers with at least one mapping segment in
+  // any bundle. Lines outside this set were eliminated from the build.
+  const mappedLinesBySource = new Map();
 
   for (const script of localScripts) {
     let filePath;
@@ -407,6 +599,22 @@ export async function generateReport(v8Scripts, options = {}) {
         `script: ${script.url} — ${script.functions.length} V8 functions, covered: ${script.functions.filter((f) => f.ranges[0]?.count > 0).length}`,
       );
 
+      // Load the bundle's source map once — used to filter synthetic entries
+      // by original source and to detect bundler-eliminated code. A missing
+      // or malformed map leaves tracer null; both consumers handle that.
+      let tracer = null;
+      const mapPath = filePath + ".map";
+      if (fs.existsSync(mapPath)) {
+        try {
+          tracer = new TraceMap(JSON.parse(fs.readFileSync(mapPath, "utf8")));
+        } catch {
+          // malformed map — skip map-based filtering
+        }
+      }
+      if (tracer) {
+        collectMappedLines(tracer, path.dirname(filePath), mappedLinesBySource);
+      }
+
       const converter = v8ToIstanbul(filePath, 0, { source });
       await converter.load();
       // Augment V8 data with synthetic count=0 entries for class methods that
@@ -415,9 +623,9 @@ export async function generateReport(v8Scripts, options = {}) {
       const synth = syntheticUncoveredMethods(
         source,
         script.functions,
-        filePath,
         diag,
         includedPaths,
+        tracer,
       );
       if (synth.length > 0) {
         diag(
@@ -465,12 +673,15 @@ export async function generateReport(v8Scripts, options = {}) {
       const remapped = path.join(cwd, pkg.name, relInPkg);
       if (isExcluded(relPath)) continue;
       const fc = coverageMap.fileCoverageFor(file);
+      markEliminatedFunctions(fc, file, mappedLinesBySource.get(file), diag);
       fc.data.path = remapped;
       filteredMap.addFileCoverage(fc);
     } else if (file.startsWith(cwdPrefix)) {
       if (isExcluded(relPath)) continue;
       // Local project file — keep as-is.
-      filteredMap.addFileCoverage(coverageMap.fileCoverageFor(file));
+      const fc = coverageMap.fileCoverageFor(file);
+      markEliminatedFunctions(fc, file, mappedLinesBySource.get(file), diag);
+      filteredMap.addFileCoverage(fc);
     }
     // Everything else (library internals, node_modules, .embroider) is dropped.
   }
