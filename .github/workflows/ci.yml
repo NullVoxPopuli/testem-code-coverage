@@ -33,6 +33,27 @@ jobs:
           cache: pnpm
       - run: pnpm install
       - run: pnpm test
+      - name: Upload coverage report (vite-app-js)
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: coverage-vite-app-js
+          path: test-scenarios/vite-app-js/coverage
+          if-no-files-found: ignore
+      - name: Upload coverage report (v2-addon-js)
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: coverage-v2-addon-js
+          path: test-scenarios/v2-addon-js/coverage
+          if-no-files-found: ignore
+      - name: Upload coverage report (vite-app-using-v2-addon-js)
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: coverage-vite-app-using-v2-addon-js
+          path: test-scenarios/vite-app-using-v2-addon-js/coverage
+          if-no-files-found: ignore
       - name: Show coverage error log (on failure)
         if: failure()
         run: |
