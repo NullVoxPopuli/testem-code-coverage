@@ -2,6 +2,17 @@
 
 ## Release (2026-08-07)
 
+* testem-code-coverage 0.2.3 (patch)
+
+#### :bug: Bug Fix
+* `testem-code-coverage`
+  * [#30](https://github.com/NullVoxPopuli/testem-code-coverage/pull/30) Drop compiled-artifact functions from the functions metric ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))
+
+#### Committers: 1
+- @NullVoxPopuli's reduced-access machine account for AI usage ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))
+
+## Release (2026-08-07)
+
 * testem-code-coverage 0.2.2 (patch)
 
 #### :bug: Bug Fix
