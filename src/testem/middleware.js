@@ -65,6 +65,7 @@
 import { isAbsolute, join } from "node:path";
 import fs from "node:fs";
 import CDP from "chrome-remote-interface";
+import { mergeProcessCovs } from "@bcoe/v8-coverage";
 import { generateReport } from "#v8/report.js";
 import { REPORT_TO_MIDDLEWARE_PATH } from "#utils";
 
@@ -171,28 +172,42 @@ export function middleware(options = {}) {
     );
   }
 
-  // Proactive coverage cache — refreshed every CACHE_INTERVAL ms while tests
-  // are running. Used as a fallback in /_coverage if Chrome exits before the
-  // live takePreciseCoverage() call can complete.
+  // Proactive coverage accumulator — refreshed every CACHE_INTERVAL ms while
+  // tests are running, so a complete snapshot is always available as a
+  // fallback if Chrome exits before the live takePreciseCoverage() call in
+  // /_coverage can complete (Linux SIGTERM race: testem sends SIGTERM to
+  // Chrome ~14ms after the final TAP line).
   //
-  // Why this is needed (Linux headless Chrome SIGTERM race)
-  // -------------------------------------------------------
-  // Testem sends SIGTERM to Chrome almost immediately (~14ms) after receiving
-  // the final TAP line. Even with a keepAlive timer in the Testem adapter,
-  // Chrome may begin the shutdown sequence before the live takePreciseCoverage
-  // CDP call completes. The proactive cache is taken every CACHE_INTERVAL ms
-  // throughout the test run, so there is always a recent snapshot available as
-  // a fallback when the live call fails.
+  // Profiler.takePreciseCoverage RESETS V8's execution counters
+  // ------------------------------------------------------------
+  // Each call returns only the activity since the previous call — a delta,
+  // not a cumulative snapshot. Functions whose counters were consumed by an
+  // earlier take may be entirely absent from later takes.
   //
-  // V8 precise coverage counters are CUMULATIVE from startPreciseCoverage().
-  // Any snapshot taken after all tests have finished will therefore contain the
-  // complete coverage picture. If the last cache was taken 0–CACHE_INTERVAL ms
-  // before /_coverage arrived, and tests finished >CACHE_INTERVAL ms before
-  // /_coverage, the cache is complete. For the vast majority of test suites
-  // (tests take at least a few hundred ms), this window is comfortably covered.
+  // Because of that, every take (the periodic ones here AND the final live
+  // one in /_coverage) is merged into `coverageCache` with @bcoe/v8-coverage's
+  // mergeProcessCovs — the same algorithm c8 uses to combine V8 coverage from
+  // multiple processes. Counts sum across deltas, so the accumulated result is
+  // equivalent to one uninterrupted coverage session.
+  //
+  // (A previous version assumed counters were cumulative and kept only the
+  // LATEST take, so the final report reflected just the last ~CACHE_INTERVAL
+  // ms of the run. Which functions survived was a timing race that played out
+  // differently per OS — issue #22.)
   const CACHE_INTERVAL = 100; // ms
   let coverageCache = null;
   let cacheTimerHandle = null;
+  // Once the final coverage result has been handed to the report generator,
+  // stop merging new deltas — mergeProcessCovs may mutate its inputs, and the
+  // report is reading the accumulated object.
+  let coverageFinalized = false;
+
+  function mergeIntoCache(result) {
+    coverageCache = coverageCache
+      ? mergeProcessCovs([{ result: coverageCache }, { result }]).result
+      : result;
+    return coverageCache;
+  }
 
   function startCoverageCache() {
     if (cacheTimerHandle) clearTimeout(cacheTimerHandle);
@@ -201,17 +216,22 @@ export function middleware(options = {}) {
   }
 
   async function refreshCoverageCache() {
-    if (!cdpClient) return;
+    const session = cdpClient;
+    if (!session || coverageFinalized) return;
     try {
-      const { result } = await cdpClient.Profiler.takePreciseCoverage();
-      if (result) {
-        coverageCache = result;
+      const { result } = await session.Profiler.takePreciseCoverage();
+      // Discard the delta if the session changed while the call was in flight
+      // (e.g. the pre-reload tab's stale data arriving after the fresh
+      // coverage tab attached and reset the cache) or if the final result was
+      // already collected.
+      if (result && cdpClient === session && !coverageFinalized) {
+        mergeIntoCache(result);
       }
     } catch {
       // Ignore — will retry on next interval
     }
     // Schedule the next refresh only if cdpClient is still alive.
-    if (cdpClient) {
+    if (cdpClient && !coverageFinalized) {
       cacheTimerHandle = setTimeout(refreshCoverageCache, CACHE_INTERVAL);
     }
   }
@@ -546,8 +566,11 @@ export function middleware(options = {}) {
         try {
           const { result } = await cdpClient.Profiler.takePreciseCoverage();
           logInfo("/_coverage", `takePreciseCoverage succeeded: ${result.length} scripts`);
-          coverageResult = result;
-          resolveNewCoverage(result);
+          // The live take only holds the delta since the last periodic take —
+          // merge it with the accumulated deltas for the full picture.
+          coverageResult = mergeIntoCache(result);
+          coverageFinalized = true;
+          resolveNewCoverage(coverageResult);
           break;
         } catch (err) {
           logError("takePreciseCoverage (will retry after reconnect)", err);
@@ -557,6 +580,7 @@ export function middleware(options = {}) {
           if (coverageCache) {
             logInfo("/_coverage", `using cached coverage (${coverageCache.length} scripts)`);
             coverageResult = coverageCache;
+            coverageFinalized = true;
             resolveNewCoverage(coverageCache);
             break;
           }
@@ -592,6 +616,11 @@ export function middleware(options = {}) {
         });
 
         await handleReport?.(coverageResult);
+
+        // generateReport clears the coverage directory before writing the
+        // report, which removes the raw snapshot written above — write it
+        // again so it survives for debugging.
+        fs.writeFileSync(outputFile, JSON.stringify(coverageResult));
 
         res.json({ ok: true, scripts: coverageResult.length });
       } catch (err) {
