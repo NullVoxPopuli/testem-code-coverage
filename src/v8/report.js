@@ -353,10 +353,19 @@ function collectMappedLines(tracer, bundleDir, into) {
  * files. Every span is replaced by "0" (valid in both expression position and
  * as a class member) padded with spaces; newlines are preserved so line and
  * column numbers stay identical to the original file.
+ *
+ * Returns the blanked source plus the line span of each template — templates
+ * compile to functions, so they count as function containers when
+ * reconciling V8 function entries with the original source.
  */
 function stripGlimmerTemplates(source) {
   let out = "";
   let i = 0;
+  let line = 1;
+  const templateSpans = [];
+  const countLines = (from, to) => {
+    for (let k = from; k < to; k++) if (source[k] === "\n") line++;
+  };
   for (;;) {
     const open = source.indexOf("<template", i);
     if (open === -1) {
@@ -371,9 +380,13 @@ function stripGlimmerTemplates(source) {
     const end = close + "</template>".length;
     out += source.slice(i, open);
     out += "0" + source.slice(open + 1, end).replace(/[^\n]/g, " ");
+    countLines(i, open);
+    const start = line;
+    countLines(open, end);
+    templateSpans.push({ start, end: line });
     i = end;
   }
-  return out;
+  return { source: out, templateSpans };
 }
 
 /**
@@ -412,31 +425,56 @@ function stripDecorators(source) {
   return chars.join("");
 }
 
+/** AST walk helper — visits every node, skipping location bookkeeping keys. */
+function walkAst(node, visit) {
+  if (!node || typeof node !== "object") return;
+  if (visit(node) === false) return;
+  for (const key of Object.keys(node)) {
+    if (key === "start" || key === "end" || key === "type" || key === "loc") continue;
+    const val = node[key];
+    if (Array.isArray(val)) {
+      for (const child of val) {
+        if (child && typeof child === "object" && child.type) walkAst(child, visit);
+      }
+    } else if (val && typeof val === "object" && val.type) {
+      walkAst(val, visit);
+    }
+  }
+}
+
 /**
- * Mark functions and classes that the bundler eliminated (tree-shaken) as
- * uncovered in an Istanbul FileCoverage.
+ * Reconcile an Istanbul FileCoverage with the file's ORIGINAL source, fixing
+ * two classes of wrong data that pure V8-side processing cannot see:
  *
- * An unexported, unreferenced function is dead-code-eliminated by
- * rollup/vite: no compiled code exists, so V8 never sees it, the source map
- * has no segments for its lines, and v8-to-istanbul defaults those lines to
- * covered — a false positive (issue #22). The code was not executed, so it
- * must be reported as uncovered.
+ * 1. Compiled-artifact functions (issue #29). The build output contains
+ *    functions that do not exist in the source — decorator static blocks,
+ *    `<instance_members_initializer>`, implicit constructors, template
+ *    `scope` thunks. Their source-mapped positions land on class headers or
+ *    field lines, so a fully-covered class reports e.g. "4/6 functions" with
+ *    an uncovered range on `extends`. Every function entry whose declaration
+ *    is not inside a real function span of the original source (function /
+ *    arrow / method / user-written static block / `<template>` tag) is
+ *    removed — the functions metric then counts only functions the user
+ *    actually wrote.
  *
- * Detection: parse the ORIGINAL source file with acorn and collect every
- * function-like declaration span (function/class declarations and
- * function/arrow variable initializers). A span whose lines have no mapping
- * segment in ANY bundle's source map was eliminated from the build — zero
- * its statement counts and add an uncovered function entry. Spans with even
- * one mapped line are left alone: the bundle kept them, so real V8 data
- * (or the synthetic-method pass) already decides their coverage.
+ * 2. Bundler-eliminated (tree-shaken) code (issue #22). An unexported,
+ *    unreferenced function is dead-code-eliminated: no compiled code exists,
+ *    the source map has no segments for its lines, and v8-to-istanbul
+ *    defaults those lines to covered. Declaration spans with no mapping
+ *    segment in ANY bundle get their statement counts zeroed and an
+ *    uncovered function entry added. Spans with even one mapped line are
+ *    left alone: the bundle kept them, so real V8 data (or the
+ *    synthetic-method pass) already decides their coverage.
+ *
+ * Files that cannot be read or parsed are left untouched.
  *
  * @param {import('istanbul-lib-coverage').FileCoverage} fc
  * @param {string}           filePath     Absolute path of the original file.
  * @param {Set<number>|undefined} mappedLines  Lines with mapping segments.
  * @param {(msg: string) => void} diag
  */
-function markEliminatedFunctions(fc, filePath, mappedLines, diag) {
-  // No mapping info at all → cannot tell what was eliminated; do nothing.
+function reconcileWithOriginalSource(fc, filePath, mappedLines, diag) {
+  // No mapping info at all → nothing reliable to reconcile against.
   if (!mappedLines) return;
 
   let source;
@@ -445,8 +483,9 @@ function markEliminatedFunctions(fc, filePath, mappedLines, diag) {
   } catch {
     return;
   }
+  let templateSpans = [];
   if (/\.g[jt]s$/.test(filePath)) {
-    source = stripGlimmerTemplates(source);
+    ({ source, templateSpans } = stripGlimmerTemplates(source));
   }
   source = stripDecorators(source);
 
@@ -462,13 +501,39 @@ function markEliminatedFunctions(fc, filePath, mappedLines, diag) {
     }
   }
 
-  // Collect candidate spans. Do not recurse into a recorded node — when an
-  // outer function was eliminated, its inner functions are gone with it and
-  // one uncovered entry for the outer construct is enough.
-  const spans = [];
-  function visit(node) {
-    if (!node || typeof node !== "object") return;
+  // ── 1. Prune compiled-artifact function entries ─────────────────────────
+  // Function containers: every construct in the original source that
+  // actually compiles to a function, at any nesting depth.
+  const containers = templateSpans.slice();
+  walkAst(ast, (node) => {
+    switch (node.type) {
+      case "FunctionDeclaration":
+      case "FunctionExpression":
+      case "ArrowFunctionExpression":
+      case "MethodDefinition":
+      case "StaticBlock":
+        containers.push({ start: node.loc.start.line, end: node.loc.end.line });
+    }
+  });
 
+  for (const [key, fn] of Object.entries(fc.data.fnMap)) {
+    const line = fn.decl?.start?.line;
+    const isReal = containers.some((c) => line >= c.start && line <= c.end);
+    if (!isReal) {
+      diag(
+        `  compiled-artifact function dropped: ${fn.name} @L${line} count=${fc.data.f[key]} in ${filePath}`,
+      );
+      delete fc.data.fnMap[key];
+      delete fc.data.f[key];
+    }
+  }
+
+  // ── 2. Mark bundler-eliminated declarations as uncovered ────────────────
+  // Candidate spans: declaration-position constructs only, without recursing
+  // into a recorded node — when an outer function was eliminated, its inner
+  // functions are gone with it and one uncovered entry is enough.
+  const eliminationSpans = [];
+  walkAst(ast, (node) => {
     let name = null;
     if (node.type === "FunctionDeclaration" || node.type === "ClassDeclaration") {
       name = node.id?.name ?? "(anonymous)";
@@ -479,25 +544,12 @@ function markEliminatedFunctions(fc, filePath, mappedLines, diag) {
       name = node.id?.name ?? "(anonymous)";
     }
     if (name !== null) {
-      spans.push({ name, start: node.loc.start.line, end: node.loc.end.line });
-      return;
+      eliminationSpans.push({ name, start: node.loc.start.line, end: node.loc.end.line });
+      return false;
     }
+  });
 
-    for (const key of Object.keys(node)) {
-      if (key === "start" || key === "end" || key === "type" || key === "loc") continue;
-      const val = node[key];
-      if (Array.isArray(val)) {
-        for (const child of val) {
-          if (child && typeof child === "object" && child.type) visit(child);
-        }
-      } else if (val && typeof val === "object" && val.type) {
-        visit(val);
-      }
-    }
-  }
-  visit(ast);
-
-  for (const span of spans) {
+  for (const span of eliminationSpans) {
     let mapped = false;
     for (let line = span.start; line <= span.end; line++) {
       if (mappedLines.has(line)) {
@@ -673,14 +725,14 @@ export async function generateReport(v8Scripts, options = {}) {
       const remapped = path.join(cwd, pkg.name, relInPkg);
       if (isExcluded(relPath)) continue;
       const fc = coverageMap.fileCoverageFor(file);
-      markEliminatedFunctions(fc, file, mappedLinesBySource.get(file), diag);
+      reconcileWithOriginalSource(fc, file, mappedLinesBySource.get(file), diag);
       fc.data.path = remapped;
       filteredMap.addFileCoverage(fc);
     } else if (file.startsWith(cwdPrefix)) {
       if (isExcluded(relPath)) continue;
       // Local project file — keep as-is.
       const fc = coverageMap.fileCoverageFor(file);
-      markEliminatedFunctions(fc, file, mappedLinesBySource.get(file), diag);
+      reconcileWithOriginalSource(fc, file, mappedLinesBySource.get(file), diag);
       filteredMap.addFileCoverage(fc);
     }
     // Everything else (library internals, node_modules, .embroider) is dropped.
