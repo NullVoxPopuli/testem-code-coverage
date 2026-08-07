@@ -36,6 +36,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@bcoe/v8-coverage": "^1.0.2",
     "@jridgewell/trace-mapping": "^0.3.31",
     "acorn": "^8.16.0",
     "chrome-remote-interface": "^0.34.0",

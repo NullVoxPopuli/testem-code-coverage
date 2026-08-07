@@ -341,6 +341,8 @@ const DEFAULT_EXCLUDE = [
   "**/tests/**",
   "**/node_modules/**",
   "**/.embroider/**",
+  // Embroider-generated virtual modules (e.g. dist/@embroider/virtual/vendor.js)
+  "**/@embroider/**",
   "**/embroider-implicit-modules/**",
   "**/-embroider-*",
 ];
@@ -352,7 +354,11 @@ export async function generateReport(v8Scripts, options = {}) {
   const excludePatterns = options.exclude ?? DEFAULT_EXCLUDE;
   const configuredReporters = options.reporters;
   const effectiveReporters = configuredReporters ?? DEFAULT_REPORTERS;
-  const isExcluded = excludePatterns.length > 0 ? picomatch(excludePatterns) : () => false;
+  // dot:true so patterns match dot-directories like ".embroider" — without it
+  // picomatch skips dotfile segments and the "**/.embroider/**" default
+  // exclude never matches.
+  const isExcluded =
+    excludePatterns.length > 0 ? picomatch(excludePatterns, { dot: true }) : () => false;
 
   // Resolve any explicitly included package names to their directories
   // so they survive the node_modules filter step below.

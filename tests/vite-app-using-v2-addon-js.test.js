@@ -35,6 +35,14 @@ describe("local counter.gjs (app/components/counter.gjs)", () => {
     expect(counter.lines.covered, "some lines covered").toBeGreaterThan(0);
     expect(counter.lines.pct, "line coverage is less than 100%").toBeLessThan(100);
   });
+
+  test("methods exercised by the tests are covered (issue #22)", () => {
+    const counter = findLocalCounter();
+    // `get label` and `increment` are both exercised by the rendering tests.
+    // Before coverage deltas were merged across takePreciseCoverage calls,
+    // their counts were wiped by the periodic cache poll and this reported 0.
+    expect(counter.functions.covered, "label + increment are covered").toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe("addon counter.gjs (v2-addon-js/src/components/counter.gjs)", () => {
@@ -63,6 +71,16 @@ describe("addon counter.gjs (v2-addon-js/src/components/counter.gjs)", () => {
     expect(counter.lines.covered, "some lines covered").toBeGreaterThan(0);
     expect(counter.lines.pct, "line coverage is less than 100%").toBeLessThan(100);
   });
+
+  test("methods exercised by the tests are covered (issue #22)", () => {
+    const counter = findAddonCounter();
+    expect(counter.functions.covered, "label + increment are covered").toBeGreaterThanOrEqual(2);
+  });
+});
+
+test("embroider virtual modules are excluded from the report", () => {
+  const embroiderKeys = Object.keys(summary).filter((k) => k.includes("@embroider/"));
+  expect(embroiderKeys, "no @embroider virtual-module entries").toEqual([]);
 });
 
 describe("format-score.js", () => {
