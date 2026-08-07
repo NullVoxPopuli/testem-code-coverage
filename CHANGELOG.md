@@ -2,6 +2,21 @@
 
 ## Release (2026-08-07)
 
+* testem-code-coverage 0.2.2 (patch)
+
+#### :bug: Bug Fix
+* `testem-code-coverage`
+  * [#27](https://github.com/NullVoxPopuli/testem-code-coverage/pull/27) Report bundler-eliminated (tree-shaken) functions as uncovered ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))
+
+#### :house: Internal
+* `testem-code-coverage`
+  * [#24](https://github.com/NullVoxPopuli/testem-code-coverage/pull/24) Upload coverage reports as CI artifacts and link them from a PR comment ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))
+
+#### Committers: 1
+- @NullVoxPopuli's reduced-access machine account for AI usage ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))
+
+## Release (2026-08-07)
+
 * testem-code-coverage 0.2.1 (patch)
 
 #### :bug: Bug Fix
