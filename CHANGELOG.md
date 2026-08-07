@@ -1,5 +1,21 @@
 # Changelog
 
+## Release (2026-08-07)
+
+* testem-code-coverage 0.2.1 (patch)
+
+#### :bug: Bug Fix
+* `testem-code-coverage`
+  * [#23](https://github.com/NullVoxPopuli/testem-code-coverage/pull/23) Merge coverage deltas across takePreciseCoverage calls ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))
+
+#### :memo: Documentation
+* `testem-code-coverage`
+  * [#20](https://github.com/NullVoxPopuli/testem-code-coverage/pull/20) Update README to mention requirements for running testem directly ([@jagthedrummer](https://github.com/jagthedrummer))
+
+#### Committers: 2
+- @NullVoxPopuli's reduced-access machine account for AI usage ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))
+- Jeremy Green ([@jagthedrummer](https://github.com/jagthedrummer))
+
 ## Release (2026-03-20)
 
 * testem-code-coverage 0.2.0 (minor)

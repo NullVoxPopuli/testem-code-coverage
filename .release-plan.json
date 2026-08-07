@@ -1,22 +1,22 @@
 {
   "solution": {
     "testem-code-coverage": {
-      "impact": "minor",
-      "oldVersion": "0.1.0",
-      "newVersion": "0.2.0",
+      "impact": "patch",
+      "oldVersion": "0.2.0",
+      "newVersion": "0.2.1",
       "tagName": "latest",
       "constraints": [
         {
-          "impact": "minor",
-          "reason": "Appears in changelog section :rocket: Enhancement"
+          "impact": "patch",
+          "reason": "Appears in changelog section :bug: Bug Fix"
         },
         {
           "impact": "patch",
-          "reason": "Appears in changelog section :house: Internal"
+          "reason": "Appears in changelog section :memo: Documentation"
         }
       ],
       "pkgJSONPath": "./package.json"
     }
   },
-  "description": "## Release (2026-03-20)\n\n* testem-code-coverage 0.2.0 (minor)\n\n#### :rocket: Enhancement\n* `testem-code-coverage`\n  * [#18](https://github.com/NullVoxPopuli/testem-code-coverage/pull/18) Add reporters config and more documentation ([@LucasHillDex](https://github.com/LucasHillDex))\n\n#### :house: Internal\n* `testem-code-coverage`\n  * [#16](https://github.com/NullVoxPopuli/testem-code-coverage/pull/16) Ignore changelog in oxfmt ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n\n#### Committers: 2\n- Lucas Hill ([@LucasHillDex](https://github.com/LucasHillDex))\n- [@NullVoxPopuli](https://github.com/NullVoxPopuli)\n"
+  "description": "## Release (2026-08-07)\n\n* testem-code-coverage 0.2.1 (patch)\n\n#### :bug: Bug Fix\n* `testem-code-coverage`\n  * [#23](https://github.com/NullVoxPopuli/testem-code-coverage/pull/23) Merge coverage deltas across takePreciseCoverage calls ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n\n#### :memo: Documentation\n* `testem-code-coverage`\n  * [#20](https://github.com/NullVoxPopuli/testem-code-coverage/pull/20) Update README to mention requirements for running testem directly ([@jagthedrummer](https://github.com/jagthedrummer))\n\n#### Committers: 2\n- @NullVoxPopuli's reduced-access machine account for AI usage ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n- Jeremy Green ([@jagthedrummer](https://github.com/jagthedrummer))\n"
 }
