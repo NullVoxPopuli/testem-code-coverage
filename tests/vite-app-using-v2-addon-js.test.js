@@ -81,6 +81,29 @@ describe("store.js (app/services/store.js)", () => {
   });
 });
 
+describe("tracked-box.js (app/utils/tracked-box.js)", () => {
+  function findTrackedBox() {
+    const key = Object.keys(summary).find((k) => k === "app/utils/tracked-box.js");
+    return key ? summary[key] : undefined;
+  }
+
+  test("exists in coverage report", () => {
+    expect(findTrackedBox(), "tracked-box.js entry exists").toBeDefined();
+  });
+
+  test("fully exercised class reports 100% functions (issue #29)", () => {
+    const box = findTrackedBox();
+    // The compiled class contains helper functions that do not exist in the
+    // source (decorator static block, <instance_members_initializer>). Those
+    // must not appear in the functions metric: the only function is the
+    // `doubled` getter, and it is covered.
+    expect(box.functions.total, "only the getter is a function").toBe(1);
+    expect(box.functions.pct, "100% functions").toBe(100);
+    expect(box.lines.pct, "100% lines").toBe(100);
+    expect(box.statements.pct, "100% statements").toBe(100);
+  });
+});
+
 describe("addon counter.gjs (v2-addon-js/src/components/counter.gjs)", () => {
   function findAddonCounter() {
     const key = Object.keys(summary).find(
