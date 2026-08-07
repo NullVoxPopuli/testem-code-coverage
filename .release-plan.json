@@ -2,8 +2,8 @@
   "solution": {
     "testem-code-coverage": {
       "impact": "patch",
-      "oldVersion": "0.2.0",
-      "newVersion": "0.2.1",
+      "oldVersion": "0.2.1",
+      "newVersion": "0.2.2",
       "tagName": "latest",
       "constraints": [
         {
@@ -12,11 +12,11 @@
         },
         {
           "impact": "patch",
-          "reason": "Appears in changelog section :memo: Documentation"
+          "reason": "Appears in changelog section :house: Internal"
         }
       ],
       "pkgJSONPath": "./package.json"
     }
   },
-  "description": "## Release (2026-08-07)\n\n* testem-code-coverage 0.2.1 (patch)\n\n#### :bug: Bug Fix\n* `testem-code-coverage`\n  * [#23](https://github.com/NullVoxPopuli/testem-code-coverage/pull/23) Merge coverage deltas across takePreciseCoverage calls ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n\n#### :memo: Documentation\n* `testem-code-coverage`\n  * [#20](https://github.com/NullVoxPopuli/testem-code-coverage/pull/20) Update README to mention requirements for running testem directly ([@jagthedrummer](https://github.com/jagthedrummer))\n\n#### Committers: 2\n- @NullVoxPopuli's reduced-access machine account for AI usage ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n- Jeremy Green ([@jagthedrummer](https://github.com/jagthedrummer))\n"
+  "description": "## Release (2026-08-07)\n\n* testem-code-coverage 0.2.2 (patch)\n\n#### :bug: Bug Fix\n* `testem-code-coverage`\n  * [#27](https://github.com/NullVoxPopuli/testem-code-coverage/pull/27) Report bundler-eliminated (tree-shaken) functions as uncovered ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n\n#### :house: Internal\n* `testem-code-coverage`\n  * [#24](https://github.com/NullVoxPopuli/testem-code-coverage/pull/24) Upload coverage reports as CI artifacts and link them from a PR comment ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n\n#### Committers: 1\n- @NullVoxPopuli's reduced-access machine account for AI usage ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n"
 }
