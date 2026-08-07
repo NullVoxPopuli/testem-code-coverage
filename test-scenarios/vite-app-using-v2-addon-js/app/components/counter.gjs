@@ -3,6 +3,12 @@ import { tracked } from '@glimmer/tracking';
 import { action } from '@ember/object';
 import { on } from '@ember/modifier';
 
+// Never called, not exported — tree-shaken from the bundle, must still show
+// as uncovered (issue #22, second report).
+function unusedNonClassFunction() {
+  return 'yo';
+}
+
 export default class Counter extends Component {
   @tracked count = 0;
 

@@ -43,6 +43,42 @@ describe("local counter.gjs (app/components/counter.gjs)", () => {
     // their counts were wiped by the periodic cache poll and this reported 0.
     expect(counter.functions.covered, "label + increment are covered").toBeGreaterThanOrEqual(2);
   });
+
+  test("tree-shaken unusedNonClassFunction is uncovered (issue #22)", () => {
+    const counter = findLocalCounter();
+    // unusedNonClassFunction is unexported and never called, so the bundler
+    // removes it from the build entirely. It must still be reported as an
+    // uncovered function, not default to covered. Together with the two
+    // never-called class methods that makes at least 3 uncovered functions —
+    // without tree-shake detection there are only 2.
+    const uncovered = counter.functions.total - counter.functions.covered;
+    expect(
+      uncovered,
+      "clampedCount + countAsString + unusedNonClassFunction",
+    ).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("store.js (app/services/store.js)", () => {
+  function findStore() {
+    const key = Object.keys(summary).find((k) => k === "app/services/store.js");
+    return key ? summary[key] : undefined;
+  }
+
+  test("exists in coverage report", () => {
+    expect(findStore(), "store.js entry exists").toBeDefined();
+  });
+
+  test("tree-shaken unusedTestFunction is uncovered (issue #22)", () => {
+    const store = findStore();
+    // unusedTestFunction is the only function in the file. It is unexported
+    // and never called, so the bundler tree-shakes it out of the build — no
+    // compiled code maps back to its lines. It must be reported as an
+    // uncovered function with its lines uncovered, not default to covered.
+    expect(store.functions.total, "the eliminated function is tracked").toBeGreaterThanOrEqual(1);
+    expect(store.functions.covered, "no functions covered").toBe(0);
+    expect(store.lines.pct, "its lines are uncovered").toBeLessThan(100);
+  });
 });
 
 describe("addon counter.gjs (v2-addon-js/src/components/counter.gjs)", () => {
