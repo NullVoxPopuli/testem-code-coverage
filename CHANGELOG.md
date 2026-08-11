@@ -1,5 +1,16 @@
 # Changelog
 
+## Release (2026-08-11)
+
+* testem-code-coverage 0.3.0 (minor)
+
+#### :rocket: Enhancement
+* `testem-code-coverage`
+  * [#32](https://github.com/NullVoxPopuli/testem-code-coverage/pull/32) Collect coverage from every browser, not just one ([@NullVoxPopuli](https://github.com/NullVoxPopuli))
+
+#### Committers: 1
+- [@NullVoxPopuli](https://github.com/NullVoxPopuli)
+
 ## Release (2026-08-07)
 
 * testem-code-coverage 0.2.3 (patch)

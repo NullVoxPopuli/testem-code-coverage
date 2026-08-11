@@ -1,18 +1,18 @@
 {
   "solution": {
     "testem-code-coverage": {
-      "impact": "patch",
-      "oldVersion": "0.2.2",
-      "newVersion": "0.2.3",
+      "impact": "minor",
+      "oldVersion": "0.2.3",
+      "newVersion": "0.3.0",
       "tagName": "latest",
       "constraints": [
         {
-          "impact": "patch",
-          "reason": "Appears in changelog section :bug: Bug Fix"
+          "impact": "minor",
+          "reason": "Appears in changelog section :rocket: Enhancement"
         }
       ],
       "pkgJSONPath": "./package.json"
     }
   },
-  "description": "## Release (2026-08-07)\n\n* testem-code-coverage 0.2.3 (patch)\n\n#### :bug: Bug Fix\n* `testem-code-coverage`\n  * [#30](https://github.com/NullVoxPopuli/testem-code-coverage/pull/30) Drop compiled-artifact functions from the functions metric ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n\n#### Committers: 1\n- @NullVoxPopuli's reduced-access machine account for AI usage ([@NullVoxPopuli-ai-agent](https://github.com/NullVoxPopuli-ai-agent))\n"
+  "description": "## Release (2026-08-11)\n\n* testem-code-coverage 0.3.0 (minor)\n\n#### :rocket: Enhancement\n* `testem-code-coverage`\n  * [#32](https://github.com/NullVoxPopuli/testem-code-coverage/pull/32) Collect coverage from every browser, not just one ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n\n#### Committers: 1\n- [@NullVoxPopuli](https://github.com/NullVoxPopuli)\n"
 }
