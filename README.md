@@ -27,7 +27,8 @@ module.exports = {
   // ...
   middleware: [
     require("testem-code-coverage").middleware({
-      /* optional config here */
+      // optional config here, see "Configuration" below
+      distDir: "dist",
     }),
   ],
   // ...
