@@ -2,16 +2,18 @@ import { describe, test, expect, beforeAll } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runScenario, readCoverageSummary } from "./helpers.ts";
+import { runScenario, readCoverageSummary, readCoverageFiles, dependencyFiles } from "./helpers.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const scenarioDir = join(repoRoot, "test-scenarios", "vite-app-using-v2-addon-js");
 
 let summary;
+let files;
 
 beforeAll(() => {
   runScenario(scenarioDir);
   summary = readCoverageSummary(scenarioDir);
+  files = readCoverageFiles(scenarioDir);
 });
 
 test("coverage directory was created", () => {
@@ -134,6 +136,32 @@ describe("addon counter.gjs (v2-addon-js/src/components/counter.gjs)", () => {
   test("methods exercised by the tests are covered (issue #22)", () => {
     const counter = findAddonCounter();
     expect(counter.functions.covered, "label + increment are covered").toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("dependency filtering", () => {
+  test("no dependency files are reported", () => {
+    // v2-addon-js reaches the app through node_modules too, but it lives in
+    // this git repo — the symlink resolves back to test-scenarios/v2-addon-js,
+    // so it is app code as far as coverage is concerned. Everything installed
+    // from the registry must be gone.
+    expect(dependencyFiles(files), "no node_modules files in the report").toEqual([]);
+  });
+
+  test("the same-repo addon is still reported", () => {
+    const addonFiles = files.filter((file) => file.includes("v2-addon-js"));
+    expect(addonFiles.length, "addon files present").toBeGreaterThan(0);
+  });
+
+  test("every reported file exists on disk, apart from included packages (issue #34)", () => {
+    // Files from an `include`d package are deliberately re-rooted under the
+    // project as "<pkg-name>/..." so the HTML report groups them by package
+    // name rather than by a deep relative path. Those paths are synthetic and
+    // are the one exception; every other entry must be a real file.
+    const missing = files.filter(
+      (file) => !existsSync(file) && !file.startsWith(join(scenarioDir, "v2-addon-js") + "/"),
+    );
+    expect(missing).toEqual([]);
   });
 });
 

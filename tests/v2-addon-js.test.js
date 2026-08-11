@@ -2,16 +2,18 @@ import { describe, test, expect, beforeAll } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runScenario, readCoverageSummary } from "./helpers.ts";
+import { runScenario, readCoverageSummary, readCoverageFiles, dependencyFiles } from "./helpers.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const scenarioDir = join(repoRoot, "test-scenarios", "v2-addon-js");
 
 let summary;
+let files;
 
 beforeAll(() => {
   runScenario(scenarioDir);
   summary = readCoverageSummary(scenarioDir);
+  files = readCoverageFiles(scenarioDir);
 });
 
 test("coverage directory was created", () => {
@@ -44,4 +46,12 @@ describe("counter.gjs", () => {
 test("no format-score.js in coverage (addon has no such file)", () => {
   const key = Object.keys(summary).find((k) => k.endsWith("format-score.js"));
   expect(key, "format-score.js should not appear in addon coverage").toBeUndefined();
+});
+
+test("no dependency files are reported", () => {
+  expect(dependencyFiles(files), "no node_modules files in the report").toEqual([]);
+});
+
+test("every reported file exists on disk (issue #34)", () => {
+  expect(files.filter((file) => !existsSync(file))).toEqual([]);
 });

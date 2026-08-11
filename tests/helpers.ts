@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync, existsSync, realpathSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 
 /**
  * Run `pnpm <script>` (default: `test`) inside a scenario directory.
@@ -88,4 +88,47 @@ export function readCoverageSummary(
       dropBranches(value),
     ]),
   );
+}
+
+/**
+ * Absolute paths of every file in a scenario's coverage-summary.json,
+ * without the `total` sentinel.
+ */
+export function readCoverageFiles(scenarioDir: string, coverageDir = "coverage"): string[] {
+  const summaryPath = join(scenarioDir, coverageDir, "coverage-summary.json");
+
+  if (!existsSync(summaryPath)) {
+    throw new Error(`coverage-summary.json not found at ${summaryPath}`);
+  }
+
+  const raw: Record<string, unknown> = JSON.parse(readFileSync(summaryPath, "utf8"));
+
+  return Object.keys(raw).filter((key) => key !== "total");
+}
+
+/**
+ * Of the given reported files, the ones that belong to a third-party
+ * dependency and therefore should never have been reported.
+ *
+ * A node_modules path on its own proves nothing: pnpm symlinks every package
+ * in this repo's workspace into the consuming scenario's node_modules, and
+ * those ARE files we want covered. Resolving symlinks first tells the two
+ * apart — a package installed from the registry still sits inside a
+ * node_modules directory after resolution, while a package that lives in this
+ * git repo resolves back to its checked-in source.
+ */
+export function dependencyFiles(files: string[]): string[] {
+  return files.filter((file) => {
+    if (!file.split(sep).includes("node_modules")) return false;
+
+    let resolved: string;
+    try {
+      resolved = realpathSync(file);
+    } catch {
+      // Unresolvable, but it named node_modules — certainly not app code.
+      return true;
+    }
+
+    return resolved.split(sep).includes("node_modules");
+  });
 }

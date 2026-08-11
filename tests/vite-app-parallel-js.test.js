@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeAll } from "vitest";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runScenario, readCoverageSummary } from "./helpers.ts";
+import { runScenario, readCoverageSummary, readCoverageFiles, dependencyFiles } from "./helpers.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const scenarioDir = join(repoRoot, "test-scenarios", "vite-app-js");
@@ -18,10 +19,12 @@ const scenarioDir = join(repoRoot, "test-scenarios", "vite-app-js");
  * the race contributes nothing and its file reports zero covered lines.
  */
 let summary;
+let files;
 
 beforeAll(() => {
   runScenario(scenarioDir, "test:parallel");
   summary = readCoverageSummary(scenarioDir, "coverage-parallel");
+  files = readCoverageFiles(scenarioDir, "coverage-parallel");
 });
 
 function find(suffix) {
@@ -59,4 +62,14 @@ describe("merged coverage", () => {
     expect(formatScore.lines.pct, "format-score.js below 100%").toBeLessThan(100);
     expect(counter.functions.pct, "counter.gjs functions below 100%").toBeLessThan(100);
   });
+});
+
+test("no dependency files survive the merge", () => {
+  // Merging two browsers' snapshots must not reintroduce node_modules code
+  // that either browser's own filtering already dropped.
+  expect(dependencyFiles(files), "no node_modules files in the report").toEqual([]);
+});
+
+test("every reported file exists on disk (issue #34)", () => {
+  expect(files.filter((file) => !existsSync(file))).toEqual([]);
 });
