@@ -3,11 +3,11 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 
 /**
- * Run `pnpm test` inside a scenario directory.
+ * Run `pnpm <script>` (default: `test`) inside a scenario directory.
  * Throws with stdout+stderr attached if the command exits non-zero.
  */
-export function runScenario(scenarioDir: string): void {
-  const result = spawnSync("pnpm", ["test"], {
+export function runScenario(scenarioDir: string, script = "test"): void {
+  const result = spawnSync("pnpm", [script], {
     cwd: scenarioDir,
     encoding: "utf8",
     // Pipe both streams so we can include them in error messages.
@@ -69,8 +69,11 @@ function dropBranches(entry: unknown): unknown {
  * Branch counts are omitted — they are non-deterministic across runs due to
  * V8's tiered JIT compilation.
  */
-export function readCoverageSummary(scenarioDir: string): Record<string, unknown> {
-  const summaryPath = join(scenarioDir, "coverage", "coverage-summary.json");
+export function readCoverageSummary(
+  scenarioDir: string,
+  coverageDir = "coverage",
+): Record<string, unknown> {
+  const summaryPath = join(scenarioDir, coverageDir, "coverage-summary.json");
 
   if (!existsSync(summaryPath)) {
     throw new Error(`coverage-summary.json not found at ${summaryPath}`);
