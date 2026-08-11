@@ -1,6 +1,32 @@
 /* global Testem */
 import { REPORT_TO_MIDDLEWARE_PATH } from "#utils";
 
+/**
+ * testem serves each browser's test page under a numeric id prefix
+ * (`/<id>/tests/index.html` — see testem's server route
+ * `/^\/(?:-?[0-9]+)(\/.+)$/`). When testem runs several browsers in parallel
+ * each one gets its own id, and that id is the only thing on the page that
+ * tells the middleware WHICH browser is reporting — so it can take coverage
+ * from that browser's own CDP session rather than another browser's.
+ *
+ * Returns "" when the page isn't served under an id prefix (a page opened
+ * directly, say), in which case the middleware falls back to the sole
+ * connected browser.
+ */
+function browserId() {
+  const first = String(location.pathname).split("/")[1];
+
+  return /^-?[0-9]+$/.test(first) ? first : "";
+}
+
+function reportUrl() {
+  const id = browserId();
+
+  if (!id) return REPORT_TO_MIDDLEWARE_PATH;
+
+  return `${REPORT_TO_MIDDLEWARE_PATH}?id=${encodeURIComponent(id)}`;
+}
+
 export function setupCoverage() {
   // Testem will not be defined at dev-time
   if (typeof Testem === "undefined") return;
@@ -32,7 +58,7 @@ export function setupCoverage() {
   Testem.afterTests(async function (err, data, next) {
     const keepAlive = setInterval(function () {}, 50);
     try {
-      await fetch(REPORT_TO_MIDDLEWARE_PATH);
+      await fetch(reportUrl());
       clearInterval(keepAlive);
       next();
     } catch (fetchErr) {

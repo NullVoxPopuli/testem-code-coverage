@@ -30,7 +30,9 @@
     "start": "vite",
     "test:build": "vite build --mode development",
     "test:run": "testem ci --port 0",
-    "test": "pnpm test:build && pnpm test:run"
+    "test": "pnpm test:build && pnpm test:run",
+    "test:parallel:run": "testem ci --file testem-parallel.cjs --port 0",
+    "test:parallel": "pnpm test:build && pnpm test:parallel:run"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
