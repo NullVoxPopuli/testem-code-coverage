@@ -710,6 +710,18 @@ export async function generateReport(v8Scripts, options = {}) {
   }
 
   for (const file of coverageMap.files()) {
+    // Third-party packages sometimes ship source maps whose `sources` are bare
+    // relative paths (route-recognizer's are "route-recognizer/dsl.ts", …).
+    // v8-to-istanbul resolves those against the bundle's directory, so they
+    // land inside the project root and survive every filter below even though
+    // no such file exists. The resulting entries carry meaningless numbers and
+    // make the HTML reporter render an ENOENT stack trace instead of source.
+    // A path we cannot read is never reportable, so drop it. (issue #34)
+    if (!fs.existsSync(file)) {
+      diag(`  dropped — source-mapped path does not exist on disk: ${file}`);
+      continue;
+    }
+
     // Compute the relative path for exclude-pattern matching.
     const relPath = file.startsWith(cwdPrefix) ? file.slice(cwdPrefix.length) : file;
 
