@@ -1,10 +1,15 @@
 name: Coverage Comment
 
 # Posts (or updates) a PR comment linking to the coverage-report artifacts
-# uploaded by CI. This runs on workflow_run because pull_request runs from
-# forks get a read-only GITHUB_TOKEN and cannot comment. The workflow
-# executes no code from the PR — no checkout, only GitHub API calls — so the
-# elevated token is safe here.
+# uploaded by CI, with each scenario's totals inlined. This runs on
+# workflow_run because pull_request runs from forks get a read-only
+# GITHUB_TOKEN and cannot comment.
+#
+# The elevated token is still safe: the workflow executes nothing from the PR —
+# no checkout, no install, no build. It downloads the coverage artifacts and
+# JSON.parses them, which is data handling rather than code execution, and
+# every value taken from that JSON is coerced to a finite number before it
+# reaches the comment. A hostile fork cannot inject markdown through it.
 on:
   workflow_run:
     workflows: [CI]
@@ -21,9 +26,24 @@ jobs:
       actions: read
       pull-requests: write
     steps:
+      # Data only — the artifacts hold coverage JSON, and nothing here runs it.
+      # if-no-files-found is not set because a run with no coverage at all is
+      # handled below; download-artifact simply produces an empty directory.
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v7.0.0
+        continue-on-error: true
+        with:
+          pattern: coverage-*
+          path: coverage-artifacts
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/github-script@v9.0.0
         with:
           script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+
             const run = context.payload.workflow_run;
 
             // workflow_run.pull_requests is empty for fork PRs — resolve the
@@ -65,11 +85,71 @@ jobs:
               return `| ${scenario} | [${a.name}.zip](${url}) |`;
             });
 
+            // Everything below reads the downloaded coverage-summary.json files.
+            // Their contents come from the PR, so only numbers are ever taken out
+            // of them, and only after being coerced to a finite, non-negative
+            // value — no string from the JSON reaches the comment.
+            const num = (value) => {
+              const n = Number(value);
+              return Number.isFinite(n) && n >= 0 ? n : 0;
+            };
+
+            const bar = (value) => {
+              const filled = Math.min(20, Math.max(0, Math.round(value / 5)));
+              return `${'█'.repeat(filled)}${'░'.repeat(20 - filled)}`;
+            };
+
+            const readTotals = (artifactName) => {
+              const file = path.join(
+                'coverage-artifacts',
+                artifactName,
+                'coverage-summary.json',
+              );
+              try {
+                const total = JSON.parse(fs.readFileSync(file, 'utf8')).total;
+                if (!total || typeof total !== 'object') return null;
+                return ['lines', 'statements', 'functions', 'branches']
+                  .filter((key) => total[key])
+                  .map((key) => ({
+                    key,
+                    pct: num(total[key].pct),
+                    covered: num(total[key].covered),
+                    total: num(total[key].total),
+                  }));
+              } catch {
+                // No summary in this artifact (a scenario that failed before
+                // writing one, or an expired artifact) — just link the zip.
+                return null;
+              }
+            };
+
+            const details = coverage.flatMap((a) => {
+              const metrics = readTotals(a.name);
+              if (!metrics || metrics.length === 0) return [];
+
+              const scenario = a.name.replace(/^coverage-/, '');
+              return [
+                '<details>',
+                `<summary><b>${scenario}</b></summary>`,
+                '',
+                '| Metric | | % | Covered / Total |',
+                '| --- | --- | ---: | ---: |',
+                ...metrics.map(
+                  (m) =>
+                    `| ${m.key[0].toUpperCase()}${m.key.slice(1)} | \`${bar(m.pct)}\` | **${m.pct.toFixed(2)}%** | ${m.covered} / ${m.total} |`,
+                ),
+                '',
+                '</details>',
+                '',
+              ];
+            });
+
             const marker = '<!-- coverage-reports-comment -->';
             const body = [
               marker,
               '## Coverage reports',
               '',
+              ...details,
               '| Scenario | Artifact |',
               '| --- | --- |',
               ...rows,

@@ -54,6 +54,15 @@ jobs:
           name: coverage-vite-app-using-v2-addon-js
           path: test-scenarios/vite-app-using-v2-addon-js/coverage
           if-no-files-found: ignore
+      # The parallel scenario reuses the vite-app-js app but writes to its own
+      # folder, so it needs its own artifact rather than folding into the one above.
+      - name: Upload coverage report (vite-app-js, parallel browsers)
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: coverage-vite-app-js-parallel
+          path: test-scenarios/vite-app-js/coverage-parallel
+          if-no-files-found: ignore
       - name: Show coverage error log (on failure)
         if: failure()
         run: |
