@@ -2,6 +2,17 @@
 
 ## Release (2026-08-12)
 
+* testem-code-coverage 0.3.2 (patch)
+
+#### :house: Internal
+* `testem-code-coverage`
+  * [#38](https://github.com/NullVoxPopuli/testem-code-coverage/pull/38) Show each scenario's totals in the coverage comment ([@NullVoxPopuli](https://github.com/NullVoxPopuli))
+
+#### Committers: 1
+- [@NullVoxPopuli](https://github.com/NullVoxPopuli)
+
+## Release (2026-08-12)
+
 * testem-code-coverage 0.3.1 (patch)
 
 #### :bug: Bug Fix
