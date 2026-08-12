@@ -183,6 +183,7 @@ export function middleware(options = {}) {
     connectionTimeout = 30_000,
     remoteDebuggingPort = 9222,
     userDataDir = os.tmpdir(),
+    cacheInterval = 100,
     stragglerTimeout = 30_000,
   } = chrome || {};
   const normalizedReporters = normalizeReporters(reporters);
@@ -286,7 +287,28 @@ export function middleware(options = {}) {
    * ms of the run. Which functions survived was a timing race that played out
    * differently per OS — issue #22.)
    */
-  const CACHE_INTERVAL = 100; // ms
+  const CACHE_INTERVAL = cacheInterval;
+
+  /**
+   * How much of a browser's time this accumulator is allowed to consume.
+   *
+   * A fixed short interval quietly assumes takePreciseCoverage is cheap. It is
+   * not: V8 serialises every script currently loaded, so the cost scales with
+   * the app. Measured on a mid-size Ember app it was mean 35ms / p90 98ms /
+   * max 188ms per call — against a 100ms interval, i.e. the browser was doing
+   * little else, and with N browsers on one machine that is enough to push
+   * tests past their own timeouts.
+   *
+   * So the next take is scheduled off how long the last one actually took, at
+   * roughly a 1/(FACTOR+1) duty cycle, and never sooner than cacheInterval.
+   * Small apps keep the old cadence; large apps back off on their own instead
+   * of needing every consumer to discover this and tune it by hand.
+   */
+  const CACHE_DUTY_FACTOR = 9;
+
+  function nextCacheDelay(lastTakeMs) {
+    return Math.max(CACHE_INTERVAL, lastTakeMs * CACHE_DUTY_FACTOR);
+  }
 
   function mergeIntoCache(state, result) {
     state.coverageCache = state.coverageCache
@@ -306,8 +328,14 @@ export function middleware(options = {}) {
     const session = state.cdpClient;
 
     if (!session || state.coverageFinalized) return;
+
+    let elapsed = 0;
+
     try {
+      const startedAt = Date.now();
       const { result } = await session.Profiler.takePreciseCoverage();
+
+      elapsed = Date.now() - startedAt;
 
       // Discard the delta if the session changed while the call was in flight
       // (e.g. the pre-reload tab's stale data arriving after the fresh
@@ -321,7 +349,10 @@ export function middleware(options = {}) {
     }
     // Schedule the next refresh only if this browser's session is still alive.
     if (state.cdpClient && !state.coverageFinalized) {
-      state.cacheTimerHandle = setTimeout(() => refreshCoverageCache(state), CACHE_INTERVAL);
+      state.cacheTimerHandle = setTimeout(
+        () => refreshCoverageCache(state),
+        nextCacheDelay(elapsed),
+      );
     }
   }
 
