@@ -14,12 +14,12 @@ npm add "github:NullVoxPopuli/testem-code-coverage#main"
 
 ## Setup
 
-This is assuming you are using testem and qunit.
+This assumes you are using testem and qunit.
 
 > [!NOTE]
 > While neither testem nor qunit are _new_, I consider them to be closer to finished than vitest is, and generally provide a better browser-based testing experience than vitest does (at least for now).
 
-Setup the testem middleware
+Add the middleware and a remote-debugging port:
 
 ```js
 // testem.cjs
@@ -28,39 +28,32 @@ module.exports = {
   middleware: [
     require("testem-code-coverage").middleware({
       // optional config here, see "Configuration" below
-      distDir: "dist",
     }),
   ],
-  // ...
   browser_args: {
     Chrome: {
       ci: [
         // ...
         "--remote-debugging-port=9222",
-        // ...
       ],
     },
   },
 };
 ```
 
-Setup the runtime
+Then call `setupCoverage()` before the tests start:
 
 ```js
 // tests/test-helper.js
 import { setupCoverage } from "testem-code-coverage/runtime";
 
 export async function start() {
-  // ... must come before tests are started
-  setupCoverage();
-  // ...
+  setupCoverage(); // must come before tests are started
   qunitStart();
 }
 ```
 
-### Vite
-
-If you are using Vite, source maps must be enabled for the build that serves your browser tests.
+If you build with Vite, enable source maps for the build that serves your browser tests:
 
 ```js
 // vite.config.mjs
@@ -73,163 +66,77 @@ export default defineConfig({
 });
 ```
 
-## Genrating coverage
+## Generating coverage
 
-To get coverage you need to run the `testem` CLI.
+Run tests through the `testem` CLI:
 
 ```bash
 testem ci
 ```
 
-If you're using ember, you'll want to avoid `ember test`, and reconfigure `package.json` so that your `test` script looks something like this:
+If you're using ember, avoid `ember test` and point your `test` script at testem directly:
 
-```
+```json
 "test": "vite build --mode development && testem ci --port 0"
 ```
 
 ## Configuration
 
-### Testem
+Only the testem middleware is configurable, as it is what outputs the coverage report.
 
-only the testem middleware is configurable, as it is what outputs the coverage report.
-
-Here are the default options:
+All options, with their defaults:
 
 ```js
 require("testem-code-coverage").middleware({
-  /**
-   * If a non-absolute path, this defaults to CWD + /coverage
-   * and is the location where the coverage reports are output
-   * including: HTML, JSON, and TXT
-   */
+  // Where reports are written (HTML, JSON, TXT).
+  // Relative paths resolve from CWD.
   outputFolder: "coverage",
 
-  /**
-   * Path to the built assets that Chrome loads during the test run.
-   * Defaults to "dist".
-   */
+  // Path to the built assets that Chrome loads during the test run.
   distDir: "dist",
 
-  /**
-   * Paths to include in the coverage report.
-   * By default, `node_modules` are excluded.
-   * But specifying library names here would allow you to track coverage
-   * of those libraries.
-   */
+  // node_modules are excluded by default; list library names here
+  // to track their coverage anyway.
   include: [],
 
-  /**
-   * Glob patterns for files to exclude from the coverage report.
-   * Matched against relative paths from the project root.
-   *
-   * Defaults to:
-   *   ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"]
-   *
-   * Setting this replaces the defaults entirely.
-   * Pass an empty array to disable all exclusions.
-   */
+  // Glob patterns to exclude, matched against paths relative to the
+  // project root. Setting this replaces the defaults entirely —
+  // pass [] to disable all exclusions.
   exclude: ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"],
 
-  /**
-   * Built-in Istanbul reporters to run.
-   *
-   * Defaults to ["text", "html", "json-summary"].
-   *
-   * Any reporter name supported by istanbul-reports can be used here,
-   * for example: "lcov", "cobertura", "json", or "text-summary".
-   *
-   * When omitted, the default behavior is preserved, including writing
-   * coverage/coverage-summary.txt via the text reporter.
-   */
+  // Istanbul reporters to run — any name supported by istanbul-reports
+  // works ("lcov", "cobertura", "json", "text-summary", ...).
+  // If "text" is included, coverage/coverage-summary.txt is also written.
   reporters: ["text", "html", "json-summary"],
 
-  /**
-   * async callback that can be used to generate additional
-   * report formats.
-   *
-   * @type {(coverageReport: JSON[]) => Promise<void>}
-   */
+  // async callback for generating additional report formats,
+  // beyond what the built-in Istanbul reporters offer.
+  // (coverageReport: JSON[]) => Promise<void>
   handleReport: undefined,
 
-  /**
-   * Chrome-specific configuration for telling the middleware
-   * how to connect to and interact with Chrome
-   */
   chrome: {
-    /**
-     * Amount of time to allow for Chrome to boot up.
-     *
-     * Default is 30 seconds.
-     * Units in milliseconds.
-     */
+    // How long to wait for Chrome to boot, in milliseconds.
     connectionTimeout: 30_000,
 
-    /**
-     * This is how we connect to and communicate with Chrome
-     */
+    // Must match the --remote-debugging-port passed to Chrome.
     remoteDebuggingPort: 9222,
   },
 
-  /**
-   * When true, write middleware diagnostics to stderr and coverage/errors.log.
-   */
+  // Write middleware diagnostics to stderr and coverage/errors.log.
   debug: false,
 });
 ```
 
-### Reporter selection
-
-Use `reporters` when you want to choose which built-in Istanbul outputs are written.
-
-```js
-require("testem-code-coverage").middleware({
-  reporters: ["html", "json-summary", "lcov"],
-});
-```
-
-- `reporters` accepts reporter names as strings.
-- Any reporter supported by `istanbul-reports` can be used.
-- Omitting `reporters` preserves the current default outputs: terminal `text`, `html`, `json-summary`, and `coverage-summary.txt`.
-- Setting `reporters` replaces the defaults entirely.
-- If `text` is included, the middleware also writes `coverage/coverage-summary.txt`.
-
-Use `handleReport` only when you need custom post-processing beyond Istanbul's built-in reporters.
-
-## Caveats about the implementation details
-
-These are all internal things to this testem-code-coverage library
+## Implementation notes
 
 ### `Page.reload()` is required for accurate coverage
 
-After connecting to Chrome via CDP and calling `startPreciseCoverage`, this library reloads the page before the tests run. This is not optional — it is what makes function-level coverage correct.
+testem passes the test URL to Chrome as a CLI argument, so the page loads — and all module-level code runs — before CDP can even connect. Without a reload, functions that are never called produce no V8 record at all, and `v8-to-istanbul` reports them as covered: a silent false positive. So after calling `startPreciseCoverage`, this library reloads the page so every script runs with coverage armed. Puppeteer and Playwright do the same.
 
-**Why:** testem launches Chrome with the test URL as a CLI argument, so Chrome navigates to the page _immediately on process start_. By the time CDP can connect (a page target only exists after Chrome has loaded the page), the test bundle has already been parsed and all module-level code has already executed — without any coverage tracking active.
+### Why not a Chrome launch flag?
 
-The consequence of skipping the reload:
-
-- V8 emits **no top-level function entry** (`startOffset=0`) for the bundle, because the module never ran while coverage was active.
-- Functions that are **defined but never called** (e.g. an untested class method) produce **no V8 record at all**. They are invisible to the coverage snapshot.
-- `v8-to-istanbul` initialises every source line with `count = 1` (covered) and only zeroes lines that appear in the V8 snapshot with an explicit `count = 0`. Lines with no entry stay green.
-- Result: uncalled functions report **100% coverage** — a silent false positive.
-
-Calling `Page.reload()` after `startPreciseCoverage` ensures the scripts run while coverage is already armed. V8 then produces the top-level function entry and correct `count = 0` sub-ranges for every uncalled function, which `v8-to-istanbul` uses to zero those lines out. This is the same pattern used by Puppeteer and Playwright for browser coverage.
-
-### There is no Chrome launch flag equivalent to `startPreciseCoverage`
-
-The CDP docs state: _"Coverage data for JavaScript executed **before** enabling precise code coverage may be incomplete."_ There is no `--js-flags` or other Chrome launch flag that replicates what `Profiler.startPreciseCoverage` does, because:
-
-- `startPreciseCoverage` prevents V8 from running optimized/lazy compilation and resets execution counters — these are runtime behaviors controlled on a live isolate via CDP.
-- Chrome launch flags control how the browser process starts, not V8's internal coverage state machine.
-- Node.js has `NODE_V8_COVERAGE` because it wraps the entire process startup; Chrome has no equivalent since the browser starts before any test harness can intercept it.
-
-The `Page.reload()` is the correct and only reliable approach for browser-based precise coverage via CDP.
-
-### testem has no hook between Chrome starting and the page loading
-
-testem's lifecycle hooks (`on_start`, `before_tests`) run on the server side before Chrome launches — the CDP page target does not yet exist at that point. Chrome is spawned with the test URL as the last CLI argument and navigates immediately, leaving no gap to intercept. There is no built-in way to run code between "Chrome process starts" and "Chrome loads the page" without patching testem itself.
+There isn't one. `startPreciseCoverage` changes runtime behavior on a live V8 isolate (disabling lazy compilation, resetting counters), which launch flags can't do. Node has `NODE_V8_COVERAGE` because it wraps process startup — Chrome starts before any test harness can intercept it. testem also has no hook between "Chrome starts" and "the page loads" (its lifecycle hooks run server-side, before launch), so the reload above is the only reliable option.
 
 ### Branch counts from V8 are non-deterministic
 
-V8 uses tiered JIT compilation: functions start in the **Ignition** interpreter and may be promoted to **Maglev** or **TurboFan** optimising compilers if they become "hot". The coverage ranges reported by `Profiler.takePreciseCoverage` reflect whichever tier each function is in at the moment coverage is collected. TurboFan can split a single `if` into multiple tracked ranges or collapse branches it proves are unreachable, so the total number of branch ranges varies between runs depending on which background optimisation thread fires before `takePreciseCoverage` is called.
-
-In practice, **line and function coverage for your own source files are stable** — those functions are called enough to consistently reach the same tier. The volatile numbers tend to appear in framework and vendor code (Ember internals, QUnit, test helpers) where tier-up is marginal. If you need deterministic snapshots, consider asserting only on `lines` and `functions` and omitting `branches`.
+V8's tiered JIT (Ignition → Maglev → TurboFan) can split or collapse branch ranges depending on which tier a function is in when coverage is collected, so branch totals vary between runs. Line and function coverage for your own code is stable; the noise shows up in framework and vendor code (Ember internals, QUnit, test helpers) where tier-up is marginal. If you need deterministic snapshots, assert on `lines` and `functions` and skip `branches`.
