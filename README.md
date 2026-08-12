@@ -102,7 +102,13 @@ require("testem-code-coverage").middleware({
   // Glob patterns to exclude, matched against paths relative to the
   // project root. Setting this replaces the defaults entirely —
   // pass [] to disable all exclusions.
-  exclude: ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"],
+  exclude: [
+    "**/tests/**",
+    "**/node_modules/**",
+    "**/.embroider/**",
+    "**/embroider-implicit-modules/**",
+    "**/-embroider-*",
+  ],
 
   // Istanbul reporters to run — any name supported by istanbul-reports
   // works ("lcov", "cobertura", "json", "text-summary", ...).
