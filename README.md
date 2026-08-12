@@ -88,47 +88,82 @@ All options, with their defaults:
 
 ```js
 require("testem-code-coverage").middleware({
-  // Where reports are written (HTML, JSON, TXT).
-  // Relative paths resolve from CWD.
+  /**
+   * If a non-absolute path, this defaults to CWD + /coverage
+   * and is the location where the coverage reports are output
+   * including: HTML, JSON, and TXT
+   */
   outputFolder: "coverage",
 
-  // Path to the built assets that Chrome loads during the test run.
+  /**
+   * Path to the built assets that Chrome loads during the test run.
+   * Defaults to "dist".
+   */
   distDir: "dist",
 
-  // node_modules are excluded by default; list library names here
-  // to track their coverage anyway.
+  /**
+   * Paths to include in the coverage report.
+   * By default, `node_modules` are excluded.
+   * But specifying library names here would allow you to track coverage
+   * of those libraries.
+   */
   include: [],
 
-  // Glob patterns to exclude, matched against paths relative to the
-  // project root. Setting this replaces the defaults entirely —
-  // pass [] to disable all exclusions.
-  exclude: [
-    "**/tests/**",
-    "**/node_modules/**",
-    "**/.embroider/**",
-    "**/embroider-implicit-modules/**",
-    "**/-embroider-*",
-  ],
+  /**
+   * Glob patterns for files to exclude from the coverage report.
+   * Matched against relative paths from the project root.
+   *
+   * Defaults to:
+   *   ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"]
+   *
+   * Setting this replaces the defaults entirely.
+   * Pass an empty array to disable all exclusions.
+   */
+  exclude: ["**/tests/**", "**/node_modules/**", "**/.embroider/**", "**/embroider-implicit-modules/**", "**/-embroider-*"],
 
-  // Istanbul reporters to run — any name supported by istanbul-reports
-  // works ("lcov", "cobertura", "json", "text-summary", ...).
-  // If "text" is included, coverage/coverage-summary.txt is also written.
+  /**
+   * Built-in Istanbul reporters to run.
+   *
+   * Defaults to ["text", "html", "json-summary"].
+   *
+   * Any reporter name supported by istanbul-reports can be used here,
+   * for example: "lcov", "cobertura", "json", or "text-summary".
+   *
+   * When omitted, the default behavior is preserved, including writing
+   * coverage/coverage-summary.txt via the text reporter.
+   */
   reporters: ["text", "html", "json-summary"],
 
-  // async callback for generating additional report formats,
-  // beyond what the built-in Istanbul reporters offer.
-  // (coverageReport: JSON[]) => Promise<void>
+  /**
+   * async callback that can be used to generate additional
+   * report formats.
+   *
+   * @type {(coverageReport: JSON[]) => Promise<void>}
+   */
   handleReport: undefined,
 
+  /**
+   * Chrome-specific configuration for telling the middleware
+   * how to connect to and interact with Chrome
+   */
   chrome: {
-    // How long to wait for Chrome to boot, in milliseconds.
+    /**
+     * Amount of time to allow for Chrome to boot up.
+     *
+     * Default is 30 seconds.
+     * Units in milliseconds.
+     */
     connectionTimeout: 30_000,
 
-    // Must match the --remote-debugging-port passed to Chrome.
+    /**
+     * This is how we connect to and communicate with Chrome
+     */
     remoteDebuggingPort: 9222,
   },
 
-  // Write middleware diagnostics to stderr and coverage/errors.log.
+  /**
+   * When true, write middleware diagnostics to stderr and coverage/errors.log.
+   */
   debug: false,
 });
 ```
