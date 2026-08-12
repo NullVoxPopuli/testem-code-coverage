@@ -1,5 +1,17 @@
 # Changelog
 
+## Release (2026-08-12)
+
+* testem-code-coverage 0.3.1 (patch)
+
+#### :bug: Bug Fix
+* `testem-code-coverage`
+  * [#37](https://github.com/NullVoxPopuli/testem-code-coverage/pull/37) Back the coverage accumulator off on large apps ([@NullVoxPopuli](https://github.com/NullVoxPopuli))
+  * [#35](https://github.com/NullVoxPopuli/testem-code-coverage/pull/35) Drop coverage entries whose source-mapped path does not exist ([@NullVoxPopuli](https://github.com/NullVoxPopuli))
+
+#### Committers: 1
+- [@NullVoxPopuli](https://github.com/NullVoxPopuli)
+
 ## Release (2026-08-11)
 
 * testem-code-coverage 0.3.0 (minor)
