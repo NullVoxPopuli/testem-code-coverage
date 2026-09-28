@@ -637,7 +637,13 @@ export async function generateReport(v8Scripts, options = {}) {
     let filePath;
     try {
       const parsed = new URL(script.url);
-      filePath = path.resolve(distDir, parsed.pathname.slice(1));
+      let pathname = parsed.pathname;
+      if (options.base) {
+        pathname = pathname.slice(options.base.length);
+      } else {
+        pathname = pathname.slice(1);
+      }
+      filePath = path.resolve(distDir, pathname);
     } catch {
       continue;
     }
