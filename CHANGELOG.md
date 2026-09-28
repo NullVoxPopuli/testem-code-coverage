@@ -1,5 +1,21 @@
 # Changelog
 
+## Release (2026-09-28)
+
+* testem-code-coverage 0.4.0 (minor)
+
+#### :rocket: Enhancement
+* `testem-code-coverage`
+  * [#41](https://github.com/NullVoxPopuli/testem-code-coverage/pull/41) add support for apps build with base configured ([@mansona](https://github.com/mansona))
+
+#### :house: Internal
+* `testem-code-coverage`
+  * [#38](https://github.com/NullVoxPopuli/testem-code-coverage/pull/38) Show each scenario's totals in the coverage comment ([@NullVoxPopuli](https://github.com/NullVoxPopuli))
+
+#### Committers: 2
+- Chris Manson ([@mansona](https://github.com/mansona))
+- [@NullVoxPopuli](https://github.com/NullVoxPopuli)
+
 ## Release (2026-08-12)
 
 * testem-code-coverage 0.3.1 (patch)

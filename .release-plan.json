@@ -1,18 +1,22 @@
 {
   "solution": {
     "testem-code-coverage": {
-      "impact": "patch",
-      "oldVersion": "0.3.0",
-      "newVersion": "0.3.1",
+      "impact": "minor",
+      "oldVersion": "0.3.1",
+      "newVersion": "0.4.0",
       "tagName": "latest",
       "constraints": [
         {
+          "impact": "minor",
+          "reason": "Appears in changelog section :rocket: Enhancement"
+        },
+        {
           "impact": "patch",
-          "reason": "Appears in changelog section :bug: Bug Fix"
+          "reason": "Appears in changelog section :house: Internal"
         }
       ],
       "pkgJSONPath": "./package.json"
     }
   },
-  "description": "## Release (2026-08-12)\n\n* testem-code-coverage 0.3.1 (patch)\n\n#### :bug: Bug Fix\n* `testem-code-coverage`\n  * [#37](https://github.com/NullVoxPopuli/testem-code-coverage/pull/37) Back the coverage accumulator off on large apps ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n  * [#35](https://github.com/NullVoxPopuli/testem-code-coverage/pull/35) Drop coverage entries whose source-mapped path does not exist ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n\n#### Committers: 1\n- [@NullVoxPopuli](https://github.com/NullVoxPopuli)\n"
+  "description": "## Release (2026-09-28)\n\n* testem-code-coverage 0.4.0 (minor)\n\n#### :rocket: Enhancement\n* `testem-code-coverage`\n  * [#41](https://github.com/NullVoxPopuli/testem-code-coverage/pull/41) add support for apps build with base configured ([@mansona](https://github.com/mansona))\n\n#### :house: Internal\n* `testem-code-coverage`\n  * [#38](https://github.com/NullVoxPopuli/testem-code-coverage/pull/38) Show each scenario's totals in the coverage comment ([@NullVoxPopuli](https://github.com/NullVoxPopuli))\n\n#### Committers: 2\n- Chris Manson ([@mansona](https://github.com/mansona))\n- [@NullVoxPopuli](https://github.com/NullVoxPopuli)\n"
 }
