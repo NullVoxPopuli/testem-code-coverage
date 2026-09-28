@@ -178,6 +178,7 @@ export function middleware(options = {}) {
     chrome,
     debug = false,
     reporters,
+    base,
   } = options;
   const {
     connectionTimeout = 30_000,
@@ -877,6 +878,7 @@ export function middleware(options = {}) {
       exclude,
       debug,
       reporters: normalizedReporters,
+      base,
     });
 
     await handleReport?.(merged);
